@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
+import '../game/models.dart';
 import '../game/land_grabber_game.dart';
 
 class GameScreen extends StatefulWidget {
@@ -18,7 +19,7 @@ class _GameScreenState extends State<GameScreen> {
     p1Percent: '0.0',
     p2Percent: '0.0',
     timeText: '3:00',
-    bounceText: '튕김: 0 / 3',
+    bounceText: '발사: 0 / 3',
     status: '',
   );
   Timer? _matchTimer;
@@ -36,6 +37,7 @@ class _GameScreenState extends State<GameScreen> {
             timeText: state.timeText,
             bounceText: state.bounceText,
             status: state.status ?? hud.status,
+            phase: state.phase ?? hud.phase,
           );
         });
       },
@@ -75,16 +77,30 @@ class _GameScreenState extends State<GameScreen> {
             ),
             if (hud.status != null && hud.status!.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  hud.status!,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    shadows: [Shadow(color: Colors.black, blurRadius: 4)],
-                  ),
-                  textAlign: TextAlign.center,
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: Column(
+                  children: [
+                    if (hud.phase == GameState.placing)
+                      Text(
+                        '① 모서리 탭해 위치 선택 → ② 돌 탭 → ③ 뒤로 당겨 발사 (최대 3회)',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade400,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    const SizedBox(height: 4),
+                    Text(
+                      hud.status!,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
               ),
           ],

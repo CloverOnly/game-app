@@ -3,55 +3,56 @@ import 'models.dart';
 
 class TurnManager {
   PlayerId currentPlayer = PlayerId.p1;
-  int bounceCount = 0;
-  bool isLaunched = false;
+  int shotCount = 0;
   bool turnActive = false;
-  bool leftBase = false;
+  bool leftStartZone = false;
 
   void startTurn() {
-    bounceCount = 0;
-    isLaunched = false;
+    shotCount = 0;
     turnActive = true;
-    leftBase = false;
+    leftStartZone = false;
   }
 
-  void onLaunch() {
-    isLaunched = true;
-    leftBase = true;
+  void onShotFired() {
+    shotCount++;
   }
 
-  void onBounce() {
-    bounceCount++;
+  void markLeftStartZone() {
+    leftStartZone = true;
   }
 
-  bool canStillBounce() => bounceCount < GameConfig.maxBounces;
+  bool canShootAgain() => shotCount < GameConfig.maxShotsPerTurn;
 
   void switchPlayer() {
     currentPlayer = currentPlayer == PlayerId.p1 ? PlayerId.p2 : PlayerId.p1;
     turnActive = false;
   }
 
-  TurnResult evaluateTurn({
+  /// 이번 발사가 끝났을 때 판정 (멈춘 상태에서만 호출)
+  ShotEndResult evaluateShotEnd({
     required bool onOwnTerritory,
     required bool onOpponentBase,
     required bool outOfBounds,
-    required bool isStopped,
   }) {
-    if (!isLaunched) return TurnResult.playing;
-    if (outOfBounds) return TurnResult.failedOut;
-    if (onOpponentBase && leftBase) return TurnResult.failedPenalty;
+    if (outOfBounds) return ShotEndResult.failedOut;
+    if (onOpponentBase && leftStartZone) return ShotEndResult.failedPenalty;
 
-    if (onOwnTerritory && leftBase && isStopped) {
-      return bounceCount <= GameConfig.maxBounces
-          ? TurnResult.claimed
-          : TurnResult.failedBounces;
+    if (onOwnTerritory && leftStartZone) {
+      return ShotEndResult.claimed;
     }
 
-    if (isStopped && leftBase) {
-      if (bounceCount > GameConfig.maxBounces) return TurnResult.failedBounces;
-      if (!onOwnTerritory) return TurnResult.failedBounces;
+    if (canShootAgain()) {
+      return ShotEndResult.continueTurn;
     }
 
-    return TurnResult.playing;
+    return ShotEndResult.failedShots;
   }
+}
+
+enum ShotEndResult {
+  claimed,
+  continueTurn,
+  failedShots,
+  failedOut,
+  failedPenalty,
 }

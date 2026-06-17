@@ -48,10 +48,10 @@ class MenuScreen extends StatelessWidget {
                 ),
                 const Spacer(),
                 ...[
-                  '🪨 망을 당겨 발사하세요 (알까기 방식)',
-                  '🔄 최대 3번 튕길 수 있어요',
-                  '🗺️ 내 땅으로 돌아오면 영토 확보!',
-                  '⚠️ 상대 본진 관통 = 패널티',
+                  '🪨 망을 뒤로 당겨 발사 (파워 게이지)',
+                  '🔄 턴당 최대 3번 발사',
+                  '🗺️ 3번 안에 내 영토로 돌아오면 확보!',
+                  '❌ 실패 시 이번 턴 선이 모두 지워짐',
                 ].map(
                   (rule) => Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),

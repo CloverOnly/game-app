@@ -4,13 +4,11 @@ import 'package:flame_forge2d/flame_forge2d.dart';
 
 import '../constants.dart';
 import '../models.dart';
-import 'wall.dart';
 
-class Marble extends BodyComponent with ContactCallbacks {
+class Marble extends BodyComponent {
   Marble({
     required Vector2 position,
     required this.playerId,
-    this.onWallBounce,
   }) : _radius = GameConfig.marbleRadius,
        super(
          renderBody: false,
@@ -30,7 +28,6 @@ class Marble extends BodyComponent with ContactCallbacks {
 
   final double _radius;
   PlayerId playerId;
-  final VoidCallback? onWallBounce;
 
   Vector2 get velocity => body.linearVelocity;
   double get speed => velocity.length;
@@ -48,13 +45,6 @@ class Marble extends BodyComponent with ContactCallbacks {
   void moveTo(Vector2 position) {
     body.setTransform(position, 0);
     stop();
-  }
-
-  @override
-  void beginContact(Object other, Contact contact) {
-    if (other is Wall) {
-      onWallBounce?.call();
-    }
   }
 
   @override

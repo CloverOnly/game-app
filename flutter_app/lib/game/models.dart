@@ -1,8 +1,8 @@
 enum PlayerId { p1, p2 }
 
-enum TurnResult { playing, claimed, failedBounces, failedOut, failedPenalty }
+enum TurnResult { playing, claimed, failedShots, failedOut, failedPenalty }
 
-enum GameState { aiming, moving, resolving, gameOver }
+enum GameState { placing, aiming, moving, resolving, gameOver }
 
 class GamePoint {
   const GamePoint(this.x, this.y);

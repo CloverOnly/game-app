@@ -1,19 +1,23 @@
 import 'models.dart';
 
 class GameConfig {
-  static const maxBounces = 3;
+  static const maxShotsPerTurn = 3;
   static const matchDurationSec = 180;
   static const marbleRadius = 14.0;
-  static const launchPowerScale = 0.08;
-  static const minLaunchSpeed = 3.0;
-  static const maxLaunchSpeed = 18.0;
+  static const launchPowerScale = 0.12;
+  static const minLaunchSpeed = 2.0;
+  static const maxLaunchSpeed = 22.0;
+  static const maxPullDistance = 140.0;
+  static const minPullDistance = 12.0;
 }
 
 class WorldConfig {
   static const width = 540.0;
   static const height = 960.0;
   static const wallThickness = 20.0;
-  static const baseSize = 100.0;
+  /// 모서리 시작 구역(1/4 원) 반지름
+  static const cornerZoneRadius = 72.0;
+  static const fieldMargin = 36.0;
 }
 
 class PhysicsConfig {
