@@ -5,10 +5,13 @@ import 'package:flame/components.dart';
 import 'package:flame_forge2d/flame_forge2d.dart';
 import 'package:flutter/material.dart';
 
+import 'components/debug_overlay.dart';
 import 'components/marble.dart';
-import 'components/playfield_input.dart';
+import 'components/marble_visual.dart';
+import 'components/game_input.dart';
 import 'components/wall.dart';
 import 'constants.dart';
+import 'debug_log.dart';
 import 'models.dart';
 import 'territory_manager.dart';
 import 'turn_manager.dart';
@@ -28,8 +31,12 @@ class LandGrabberGame extends Forge2DGame {
 
   final territory = TerritoryManager();
   final turn = TurnManager();
+  final debug = GameDebugLog();
+
+  Vector2? lastTapPos;
 
   late Marble marble;
+  late MarbleVisual marbleVisual;
   late TerritoryLayer territoryLayer;
   late TrailLayer trailLayer;
   late AimLayer aimLayer;
@@ -43,9 +50,11 @@ class LandGrabberGame extends Forge2DGame {
   /// 현재 발사 중 궤적
   List<GamePoint> _currentStroke = [];
 
-  Vector2? dragAnchor;
-  bool isDragging = false;
-  bool marblePlaced = false;
+  bool placementLocked = false;
+
+  // 당기기 발사
+  bool _fingerDown = false;
+  Vector2? _fingerPos;
 
   @override
   Color backgroundColor() => const Color(0xFFE8E8E8);
@@ -62,10 +71,6 @@ class LandGrabberGame extends Forge2DGame {
     await camera.viewport.add(territoryLayer);
     await camera.viewport.add(trailLayer);
     await camera.viewport.add(placementHintLayer);
-    await camera.viewport.add(aimLayer);
-    await camera.viewport.add(PlayfieldInput());
-
-    await _createWalls();
 
     final start = territory.getDefaultPlacement(turn.currentPlayer);
     marble = Marble(
@@ -74,18 +79,38 @@ class LandGrabberGame extends Forge2DGame {
     );
     await world.add(marble);
 
+    marbleVisual = MarbleVisual(
+      getPosition: () => marble.body.position,
+      getPlayerId: () => marble.playerId,
+      isPreview: () => marble.placementPreview,
+    );
+    await camera.viewport.add(marbleVisual);
+
+    await camera.viewport.add(aimLayer);
+    await camera.viewport.add(DebugOverlay(
+      getLastTap: () => lastTapPos,
+      getFingerPos: () => _fingerPos,
+      getMarblePos: () => marble.body.position,
+      isVisible: () => true,
+    ));
+    await camera.viewport.add(GameInput());
+
+    await _createWalls();
+
     _startNewTurn();
   }
 
   Future<void> _createWalls() async {
     final f = territory.playfield;
     const t = WorldConfig.wallThickness;
+    const r = GameConfig.marbleRadius;
 
+    // 플레이 필드(흰 네모) 경계에 벽 배치
     final walls = [
-      (Vector2(f.x + f.w / 2, f.y - t / 2), Vector2(f.w + t * 2, t)),
-      (Vector2(f.x + f.w / 2, f.y + f.h + t / 2), Vector2(f.w + t * 2, t)),
-      (Vector2(f.x - t / 2, f.y + f.h / 2), Vector2(t, f.h + t * 2)),
-      (Vector2(f.x + f.w + t / 2, f.y + f.h / 2), Vector2(t, f.h + t * 2)),
+      (Vector2(f.x + f.w / 2, f.y - t / 2 + r), Vector2(f.w, t)),
+      (Vector2(f.x + f.w / 2, f.y + f.h + t / 2 - r), Vector2(f.w, t)),
+      (Vector2(f.x - t / 2 + r, f.y + f.h / 2), Vector2(t, f.h)),
+      (Vector2(f.x + f.w + t / 2 - r, f.y + f.h / 2), Vector2(t, f.h)),
     ];
 
     for (final (center, size) in walls) {
@@ -106,69 +131,157 @@ class LandGrabberGame extends Forge2DGame {
     if (state == GameState.moving) {
       _updateMoving();
     }
-    placementHintLayer.active = state == GameState.placing;
+    placementHintLayer.active = state == GameState.placing && !placementLocked;
     placementHintLayer.playerId = turn.currentPlayer;
     placementHintLayer.marblePos = Vector2(
       marble.body.position.x,
       marble.body.position.y,
     );
+    if (_fingerDown && state == GameState.aiming && _fingerPos != null) {
+      aimLayer.drawSlingshot(
+        marble.body.position,
+        _fingerPos!,
+        players[turn.currentPlayer]!,
+      );
+    }
   }
 
-  void handleTap(Vector2 local) {
-    if (state == GameState.placing) {
-      final playerId = turn.currentPlayer;
-      if (territory.isInStartZone(local.x, local.y, playerId)) {
-        final pos = territory.clampPlacement(local.x, local.y, playerId);
-        marble.moveTo(Vector2(pos.dx, pos.dy));
-        marblePlaced = true;
-        _updateHud(status: '돌을 탭하면 발사 준비!');
-        return;
-      }
+  bool _isNearMarble(Vector2 local) {
+    return (local - marble.body.position).length <
+        GameConfig.marbleRadius * 4;
+  }
 
-      final dist = (local - marble.body.position).length;
-      if (marblePlaced && dist < GameConfig.marbleRadius * 3) {
-        state = GameState.aiming;
-        _updateHud(status: '망을 뒤로 당겨 발사하세요!');
-      }
+  void recordTap(Vector2 local) {
+    lastTapPos = local.clone();
+    _pushDebug();
+  }
+
+  void tryPlaceMarble(Vector2 local) {
+    final x = local.x.toStringAsFixed(0);
+    final y = local.y.toStringAsFixed(0);
+    debug.log('📍 탭 ($x, $y) | state=$state locked=$placementLocked');
+
+    if (state != GameState.placing) {
+      debug.log('❌ 배치 실패: state가 placing이 아님 ($state)');
+      _pushDebug();
       return;
     }
-  }
-
-  bool handleDragStart(Vector2 local) {
-    if (state != GameState.aiming) return false;
-    final dist = (local - marble.body.position).length;
-    if (dist < GameConfig.marbleRadius * 5) {
-      isDragging = true;
-      dragAnchor = local.clone();
-      return true;
+    if (placementLocked) {
+      debug.log('❌ 배치 실패: 이미 위치 확정됨');
+      _pushDebug();
+      return;
     }
-    return false;
-  }
 
-  void handleDragUpdate(Vector2 local) {
-    if (!isDragging || state != GameState.aiming) return;
-    dragAnchor = local.clone();
-    aimLayer.drawSlingshot(
-      marble.body.position,
-      local,
-      players[turn.currentPlayer]!,
+    final playerId = turn.currentPlayer;
+    final inZone = territory.isInStartZone(local.x, local.y, playerId);
+    final center = territory.getCornerCenter(playerId);
+    final dx = local.x - center.dx;
+    final dy = local.y - center.dy;
+    debug.log(
+      '🔍 구역검사: inZone=$inZone | 코너=(${center.dx.toInt()},${center.dy.toInt()}) offset=(${dx.toInt()},${dy.toInt()})',
     );
+
+    if (!inZone) {
+      debug.log('❌ 배치 실패: 시작 구역(1/4원) 밖');
+      _pushDebug();
+      return;
+    }
+
+    final pos = territory.clampPlacement(local.x, local.y, playerId);
+    marble.moveTo(Vector2(pos.dx, pos.dy));
+    marble.placementPreview = false;
+    placementLocked = true;
+    state = GameState.aiming;
+
+    debug.log(
+      '✅ 배치 성공! 망=(${pos.dx.toInt()}, ${pos.dy.toInt()}) → aiming',
+    );
+    _updateHud(status: '✅ 위치 확정! 망을 드래그해 당겨 발사');
+    _pushDebug();
   }
 
-  void handleDragEnd() {
-    if (!isDragging || state != GameState.aiming) return;
-    isDragging = false;
+  void beginCharge(Vector2 local) {
+    final x = local.x.toStringAsFixed(0);
+    final y = local.y.toStringAsFixed(0);
+
+    if (state != GameState.aiming || !placementLocked) return;
+
+    final dist = (local - marble.body.position).length;
+    final near = _isNearMarble(local);
+
+    if (!near) {
+      debug.log('❌ 차지 실패: 망에서 너무 멂 (거리 ${dist.toStringAsFixed(0)})');
+      _pushDebug();
+      return;
+    }
+
+    _fingerDown = true;
+    _fingerPos = local.clone();
+    debug.log(
+      '⚡ 조준 시작 ($x,$y) | 망거리=${dist.toStringAsFixed(0)} → 당겨서 발사',
+    );
+    _updateHud(status: '망을 당긴 뒤 손을 떼세요');
+    _pushDebug();
+  }
+
+  void updateChargeFinger(Vector2 local) {
+    if (!_fingerDown || state != GameState.aiming) return;
+
+    _fingerPos = local.clone();
+    final pull = (local - marble.body.position).length;
+    if (pull >= GameConfig.minPullDistance) {
+      _updateHud(status: '손을 떼면 발사! (${pull.toInt()}px)');
+    }
+  }
+
+  void endCharge([Vector2? releasePos]) {
+    if (!_fingerDown) return;
+
+    if (releasePos != null) {
+      _fingerPos = releasePos.clone();
+    }
+
+    if (_fingerPos != null) {
+      final pull = (_fingerPos! - marble.body.position).length;
+      debug.log('🚀 발사 시도 pull=${pull.toStringAsFixed(0)}px');
+
+      if (pull < GameConfig.minPullDistance) {
+        debug.log(
+          '❌ 발사 취소: 당김 ${pull.toStringAsFixed(0)}px < 최소 ${GameConfig.minPullDistance.toInt()}px — 망을 더 당겨보세요',
+        );
+      } else if (!turn.canShootAgain()) {
+        debug.log('❌ 발사 취소: 남은 발사 없음');
+      } else {
+        _tryLaunch(_fingerPos!);
+      }
+    } else {
+      debug.log('❌ 발사 안 됨: 손가락 위치 없음');
+    }
+
+    _cancelCharge();
+    _pushDebug();
+  }
+
+  void cancelCharge() {
+    _cancelCharge();
+  }
+
+  void _cancelCharge() {
+    _fingerDown = false;
+    _fingerPos = null;
     aimLayer.clear();
+  }
 
-    if (dragAnchor == null) return;
-
+  void _tryLaunch(Vector2 finger) {
     final marblePos = marble.body.position;
-    final pull = marblePos - dragAnchor!;
+    // 슬링샷: 당긴 방향의 반대로 발사
+    final pull = marblePos - finger;
     final pullDist = pull.length;
 
-    dragAnchor = null;
-
-    if (pullDist < GameConfig.minPullDistance) return;
+    if (pullDist < GameConfig.minPullDistance) {
+      debug.log('❌ 발사 실패: pull 너무 짧음');
+      return;
+    }
 
     final clampedDist = pullDist.clamp(
       GameConfig.minPullDistance,
@@ -179,13 +292,11 @@ class LandGrabberGame extends Forge2DGame {
       GameConfig.maxLaunchSpeed,
     );
 
+    debug.log(
+      '✅ 발사! 속도=${speed.toStringAsFixed(1)} 방향=(${pull.x.toInt()},${pull.y.toInt()})',
+    );
     _launchMarble(pull.normalized() * speed);
-  }
-
-  void handleDragCancel() {
-    isDragging = false;
-    dragAnchor = null;
-    aimLayer.clear();
+    _pushDebug();
   }
 
   void _launchMarble(Vector2 velocity) {
@@ -206,7 +317,6 @@ class LandGrabberGame extends Forge2DGame {
     final x = pos.x;
     final y = pos.y;
     final playerId = turn.currentPlayer;
-    final f = territory.playfield;
 
     if (!territory.isOnTerritory(x, y, playerId)) {
       turn.markLeftStartZone();
@@ -220,15 +330,18 @@ class LandGrabberGame extends Forge2DGame {
       _syncTrailDisplay();
     }
 
-    if (marble.speed >= 0.35) return;
+    if (marble.speed >= 0.35) {
+      // 이동 중 필드 밖이면 즉시 아웃
+      if (territory.isOutOfPlayfield(x, y)) {
+        marble.stop();
+        _handleShotEnd(ShotEndResult.failedOut);
+      }
+      return;
+    }
 
     marble.stop();
 
-    final outOfBounds =
-        x < f.x - GameConfig.marbleRadius ||
-        x > f.x + f.w + GameConfig.marbleRadius ||
-        y < f.y - GameConfig.marbleRadius ||
-        y > f.y + f.h + GameConfig.marbleRadius;
+    final outOfBounds = territory.isOutOfPlayfield(x, y);
 
     final onOwnTerritory = territory.isOnTerritory(x, y, playerId);
     final onOpponentBase = territory.isOnOpponentBase(x, y, playerId);
@@ -258,7 +371,7 @@ class LandGrabberGame extends Forge2DGame {
         _syncTrailDisplay();
         _updateHud(
           status:
-              '발사 ${turn.shotCount}/${GameConfig.maxShotsPerTurn} - 다시 당겨 발사!',
+              '발사 ${turn.shotCount}/${GameConfig.maxShotsPerTurn} - 길게 누른 뒤 당겨 발사!',
         );
       case ShotEndResult.failedShots:
         _finishTurn('3번 안에 복귀 실패! 선이 지워집니다', keepLines: false);
@@ -312,21 +425,21 @@ class LandGrabberGame extends Forge2DGame {
   void _startNewTurn() {
     turn.startTurn();
     state = GameState.placing;
+    placementLocked = false;
     _turnStrokes.clear();
     _currentStroke = [];
-    marblePlaced = false;
-    isDragging = false;
-    dragAnchor = null;
+    _cancelCharge();
     aimLayer.clear();
     trailLayer.clearTurn();
 
     final playerId = turn.currentPlayer;
     final pos = territory.getDefaultPlacement(playerId);
     marble.playerId = playerId;
+    marble.placementPreview = true;
     marble.moveTo(Vector2(pos.dx, pos.dy));
 
     _updateHud(
-      status: '${players[playerId]!.name} - 모서리 구역을 탭해 돌 위치 선택',
+      status: '${players[playerId]!.name} - 원 안을 탭해 위치 선택 (1회만)',
     );
   }
 
@@ -356,6 +469,11 @@ class LandGrabberGame extends Forge2DGame {
   void _updateHud({String? status}) {
     final min = matchTimeLeft ~/ 60;
     final sec = (matchTimeLeft % 60).toString().padLeft(2, '0');
+
+    final chargeInfo = _fingerDown
+        ? 'pull=${_fingerPos != null ? (_fingerPos! - marble.body.position).length.toStringAsFixed(0) : "-"}px'
+        : '조준:-';
+
     onHudUpdate(
       GameHudState(
         p1Percent: (territory.getTerritoryRatio(PlayerId.p1) * 100)
@@ -366,9 +484,14 @@ class LandGrabberGame extends Forge2DGame {
         bounceText: '발사: ${turn.shotCount} / ${GameConfig.maxShotsPerTurn}',
         status: status,
         phase: state,
+        debugLines: List.of(debug.lines),
+        debugInfo:
+            'state=$state | locked=$placementLocked | $chargeInfo | 망=(${marble.body.position.x.toInt()},${marble.body.position.y.toInt()})',
       ),
     );
   }
+
+  void _pushDebug({String? status}) => _updateHud(status: status);
 }
 
 class GameHudState {
@@ -379,6 +502,8 @@ class GameHudState {
     required this.bounceText,
     this.status,
     this.phase,
+    this.debugLines = const [],
+    this.debugInfo,
   });
 
   final String p1Percent;
@@ -387,6 +512,8 @@ class GameHudState {
   final String bounceText;
   final String? status;
   final GameState? phase;
+  final List<String> debugLines;
+  final String? debugInfo;
 }
 
 class TerritoryLayer extends PositionComponent {
@@ -508,10 +635,30 @@ class AimLayer extends PositionComponent {
   Vector2? marblePos;
   Vector2? fingerPos;
   PlayerConfig? player;
+  double holdProgress = -1;
 
   @override
   Future<void> onLoad() async {
     size = Vector2(WorldConfig.width, WorldConfig.height);
+  }
+
+  void drawHoldProgress(
+    Vector2 marble,
+    double progress,
+    PlayerConfig playerConfig,
+  ) {
+    marblePos = marble;
+    fingerPos = null;
+    player = playerConfig;
+    holdProgress = progress;
+  }
+
+  void clearHoldProgress() {
+    if (fingerPos == null) {
+      holdProgress = -1;
+      marblePos = null;
+      player = null;
+    }
   }
 
   void drawSlingshot(
@@ -522,28 +669,50 @@ class AimLayer extends PositionComponent {
     marblePos = marble;
     fingerPos = finger;
     player = playerConfig;
+    holdProgress = -1;
   }
 
   void clear() {
     marblePos = null;
     fingerPos = null;
     player = null;
+    holdProgress = -1;
   }
 
   @override
   void render(Canvas canvas) {
+    if (marblePos != null && player != null && holdProgress >= 0 && fingerPos == null) {
+      final m = marblePos!;
+      final gaugeRect = Rect.fromCircle(
+        center: Offset(m.x, m.y),
+        radius: GameConfig.marbleRadius + 12,
+      );
+      canvas.drawArc(
+        gaugeRect,
+        -math.pi / 2,
+        math.pi * 2 * holdProgress,
+        false,
+        Paint()
+          ..color = Color(player!.trailColor).withValues(alpha: 0.9)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3
+          ..strokeCap = StrokeCap.round,
+      );
+      return;
+    }
+
     if (marblePos == null || fingerPos == null || player == null) return;
 
     final m = marblePos!;
     final f = fingerPos!;
-    final pull = m - f;
-    final pullDist = pull.length.clamp(0.0, GameConfig.maxPullDistance);
+    final drag = f - m; // 당기는 방향
+    final pullDist = drag.length.clamp(0.0, GameConfig.maxPullDistance);
     if (pullDist < 4) return;
 
-    final dir = pull / pull.length;
+    final dir = drag / pullDist;
     final power = pullDist / GameConfig.maxPullDistance;
 
-    // 당기는 선 (고무줄)
+    // 당기는 선
     canvas.drawLine(
       Offset(m.x, m.y),
       Offset(f.x, f.y),
@@ -552,8 +721,8 @@ class AimLayer extends PositionComponent {
         ..strokeWidth = 3,
     );
 
-    // 발사 방향 예상선
-    final launchEnd = m + dir * (pullDist * 0.9);
+    // 발사 방향 예상선 (당긴 방향의 반대)
+    final launchEnd = m - dir * (pullDist * 0.9);
     canvas.drawLine(
       Offset(m.x, m.y),
       Offset(launchEnd.x, launchEnd.y),

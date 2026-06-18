@@ -31,26 +31,91 @@ class TerritoryManager {
     };
   }
 
+  bool isOutOfPlayfield(double x, double y) {
+    final f = _playfield;
+    final r = GameConfig.marbleRadius;
+    return x < f.x + r ||
+        x > f.x + f.w - r ||
+        y < f.y + r ||
+        y > f.y + f.h - r;
+  }
+
+  bool isInsidePlayfield(double x, double y) => !isOutOfPlayfield(x, y);
+
+  /// 필드 **안쪽** 1/4 원 시작 구역 (코너 꼭짓점 기준)
   bool isInStartZone(double x, double y, PlayerId playerId) {
+    if (!isInsidePlayfield(x, y)) return false;
+
     final center = getCornerCenter(playerId);
     final r = WorldConfig.cornerZoneRadius;
     final dx = x - center.dx;
     final dy = y - center.dy;
+
     if (dx * dx + dy * dy > r * r) return false;
 
     return switch (playerId) {
+      // 좌하단 코너 → 안쪽은 오른쪽·위
       PlayerId.p1 => dx >= 0 && dy <= 0,
+      // 우상단 코너 → 안쪽은 왼쪽·아래
       PlayerId.p2 => dx <= 0 && dy >= 0,
     };
   }
 
-  Offset getDefaultPlacement(PlayerId playerId) {
+  Path _cornerPath(PlayerId playerId) {
     final center = getCornerCenter(playerId);
-    final d = WorldConfig.cornerZoneRadius * 0.45;
-    return switch (playerId) {
+    final r = WorldConfig.cornerZoneRadius;
+    final path = Path();
+
+    if (playerId == PlayerId.p1) {
+      // 좌하단: 코너 → 위 → 호(오른쪽) — 필드 안쪽
+      path.moveTo(center.dx, center.dy);
+      path.lineTo(center.dx, center.dy - r);
+      path.arcTo(
+        Rect.fromCircle(center: center, radius: r),
+        -math.pi / 2,
+        math.pi / 2,
+        false,
+      );
+      path.close();
+    } else {
+      // 우상단: 코너 → 왼쪽 → 호(아래) — 필드 안쪽
+      path.moveTo(center.dx, center.dy);
+      path.lineTo(center.dx - r, center.dy);
+      path.arcTo(
+        Rect.fromCircle(center: center, radius: r),
+        math.pi,
+        math.pi / 2,
+        false,
+      );
+      path.close();
+    }
+    return path;
+  }
+
+  Offset getDefaultPlacement(PlayerId playerId) {
+    return getStartZoneAnchor(playerId);
+  }
+
+  /// 시작 구역 안쪽 중심 (필드 방향으로 45°)
+  Offset getStartZoneAnchor(PlayerId playerId) {
+    final center = getCornerCenter(playerId);
+    final d = WorldConfig.cornerZoneRadius * 0.52;
+    final pos = switch (playerId) {
+      // 좌하단 → 필드 안쪽(우상)
       PlayerId.p1 => Offset(center.dx + d, center.dy - d),
+      // 우상단 → 필드 안쪽(좌하)
       PlayerId.p2 => Offset(center.dx - d, center.dy + d),
     };
+    return _clampInsidePlayfield(pos);
+  }
+
+  Offset _clampInsidePlayfield(Offset pos) {
+    final f = _playfield;
+    final m = GameConfig.marbleRadius + 2;
+    return Offset(
+      pos.dx.clamp(f.x + m, f.x + f.w - m),
+      pos.dy.clamp(f.y + m, f.y + f.h - m),
+    );
   }
 
   Offset clampPlacement(double x, double y, PlayerId playerId) {
@@ -73,7 +138,7 @@ class TerritoryManager {
       dy = dy / len * r;
     }
 
-    return Offset(center.dx + dx, center.dy + dy);
+    return _clampInsidePlayfield(Offset(center.dx + dx, center.dy + dy));
   }
 
   void claimTerritory(PlayerId playerId, List<GamePoint> path) {
@@ -106,7 +171,13 @@ class TerritoryManager {
   void paint(Canvas canvas) {
     final f = _playfield;
 
-    // 흰색 플레이 필드
+    // 플레이 필드 밖 (아웃 영역)
+    canvas.drawRect(
+      Offset.zero & const Size(WorldConfig.width, WorldConfig.height),
+      Paint()..color = const Color(0xFFD0D0D0),
+    );
+
+    // 흰색 플레이 필드 (경기장)
     canvas.drawRect(
       Rect.fromLTWH(f.x, f.y, f.w, f.h),
       Paint()..color = const Color(0xFFFFFFFF),
@@ -151,32 +222,8 @@ class TerritoryManager {
   }
 
   void _paintCornerZone(Canvas canvas, PlayerId playerId) {
-    final center = getCornerCenter(playerId);
-    final r = WorldConfig.cornerZoneRadius;
+    final path = _cornerPath(playerId);
     final color = Color(players[playerId]!.baseColor);
-
-    final path = Path();
-    if (playerId == PlayerId.p1) {
-      path.moveTo(center.dx, center.dy);
-      path.lineTo(center.dx + r, center.dy);
-      path.arcTo(
-        Rect.fromCircle(center: center, radius: r),
-        0,
-        math.pi / 2,
-        false,
-      );
-      path.close();
-    } else {
-      path.moveTo(center.dx, center.dy);
-      path.lineTo(center.dx, center.dy + r);
-      path.arcTo(
-        Rect.fromCircle(center: center, radius: r),
-        math.pi / 2,
-        math.pi / 2,
-        false,
-      );
-      path.close();
-    }
 
     canvas.drawPath(
       path,

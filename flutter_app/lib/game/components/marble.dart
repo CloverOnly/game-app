@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flame_forge2d/flame_forge2d.dart';
 
 import '../constants.dart';
@@ -9,8 +7,7 @@ class Marble extends BodyComponent {
   Marble({
     required Vector2 position,
     required this.playerId,
-  }) : _radius = GameConfig.marbleRadius,
-       super(
+  }) : super(
          renderBody: false,
          bodyDef: BodyDef()
            ..type = BodyType.dynamic
@@ -26,8 +23,8 @@ class Marble extends BodyComponent {
          ],
        );
 
-  final double _radius;
   PlayerId playerId;
+  bool placementPreview = false;
 
   Vector2 get velocity => body.linearVelocity;
   double get speed => velocity.length;
@@ -45,31 +42,5 @@ class Marble extends BodyComponent {
   void moveTo(Vector2 position) {
     body.setTransform(position, 0);
     stop();
-  }
-
-  @override
-  void render(Canvas canvas) {
-    final center = Offset.zero;
-    final r = _radius;
-
-    canvas.drawCircle(
-      center.translate(2, 2),
-      r,
-      Paint()..color = const Color(0x40000000),
-    );
-    canvas.drawCircle(center, r, Paint()..color = const Color(0xFFF0F0F0));
-    canvas.drawCircle(
-      center.translate(-4, -4),
-      r * 0.35,
-      Paint()..color = const Color(0xB3FFFFFF),
-    );
-    canvas.drawCircle(
-      center,
-      r,
-      Paint()
-        ..color = Color(players[playerId]!.color)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
   }
 }

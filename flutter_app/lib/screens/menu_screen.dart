@@ -48,10 +48,10 @@ class MenuScreen extends StatelessWidget {
                 ),
                 const Spacer(),
                 ...[
-                  '🪨 망을 뒤로 당겨 발사 (파워 게이지)',
+                  '📍 턴 시작 시 원 안 탭으로 위치 선택 (1회)',
+                  '👆 망을 길게 누른 뒤 뒤로 당기기',
                   '🔄 턴당 최대 3번 발사',
                   '🗺️ 3번 안에 내 영토로 돌아오면 확보!',
-                  '❌ 실패 시 이번 턴 선이 모두 지워짐',
                 ].map(
                   (rule) => Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),

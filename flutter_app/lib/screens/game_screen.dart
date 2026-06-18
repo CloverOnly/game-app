@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
-import '../game/models.dart';
 import '../game/land_grabber_game.dart';
 
 class GameScreen extends StatefulWidget {
@@ -38,6 +37,8 @@ class _GameScreenState extends State<GameScreen> {
             bounceText: state.bounceText,
             status: state.status ?? hud.status,
             phase: state.phase ?? hud.phase,
+            debugLines: state.debugLines,
+            debugInfo: state.debugInfo ?? hud.debugInfo,
           );
         });
       },
@@ -75,36 +76,68 @@ class _GameScreenState extends State<GameScreen> {
                 ),
               ),
             ),
-            if (hud.status != null && hud.status!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: Column(
-                  children: [
-                    if (hud.phase == GameState.placing)
-                      Text(
-                        '① 모서리 탭해 위치 선택 → ② 돌 탭 → ③ 뒤로 당겨 발사 (최대 3회)',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade400,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    const SizedBox(height: 4),
-                    Text(
-                      hud.status!,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        shadows: [Shadow(color: Colors.black, blurRadius: 4)],
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
+            _DebugPanel(hud: hud),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DebugPanel extends StatelessWidget {
+  const _DebugPanel({required this.hud});
+
+  final GameHudState hud;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: const Color(0xCC000000),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF444444)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (hud.status != null && hud.status!.isNotEmpty)
+            Text(
+              hud.status!,
+              style: const TextStyle(
+                color: Color(0xFF7AB3F0),
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          if (hud.debugInfo != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              hud.debugInfo!,
+              style: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 11),
+            ),
+          ],
+          if (hud.debugLines.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            const Text(
+              '🐛 디버그 로그',
+              style: TextStyle(color: Color(0xFFFFCC00), fontSize: 11),
+            ),
+            ...hud.debugLines.take(5).map(
+              (line) => Text(
+                line,
+                style: const TextStyle(
+                  color: Color(0xFFCCCCCC),
+                  fontSize: 10,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

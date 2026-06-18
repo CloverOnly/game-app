@@ -4,11 +4,13 @@ class GameConfig {
   static const maxShotsPerTurn = 3;
   static const matchDurationSec = 180;
   static const marbleRadius = 14.0;
-  static const launchPowerScale = 0.12;
-  static const minLaunchSpeed = 2.0;
-  static const maxLaunchSpeed = 22.0;
+  static const launchPowerScale = 0.28;
+  static const minLaunchSpeed = 5.0;
+  static const maxLaunchSpeed = 45.0;
   static const maxPullDistance = 140.0;
-  static const minPullDistance = 12.0;
+  static const minPullDistance = 6.0;
+  /// 짧게 누른 뒤 바로 당겨도 발사 가능 (초)
+  static const longPressDuration = 0.2;
 }
 
 class WorldConfig {
@@ -16,13 +18,13 @@ class WorldConfig {
   static const height = 960.0;
   static const wallThickness = 20.0;
   /// 모서리 시작 구역(1/4 원) 반지름
-  static const cornerZoneRadius = 72.0;
+  static const cornerZoneRadius = 84.0;
   static const fieldMargin = 36.0;
 }
 
 class PhysicsConfig {
   static const friction = 0.02;
-  static const linearDamping = 1.2;
+  static const linearDamping = 0.5;
   static const restitution = 0.75;
   static const density = 1.0;
 }
