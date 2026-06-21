@@ -38,6 +38,7 @@ class GameInput extends PositionComponent
 
   @override
   void onTapDown(TapDownEvent event) {
+    if (!game.acceptsHumanInput) return;
     switch (game.state) {
       case GameState.placing:
         if (game.placementLocked) return;
@@ -65,7 +66,7 @@ class GameInput extends PositionComponent
   @override
   void onDragStart(DragStartEvent event) {
     super.onDragStart(event);
-    if (game.state != GameState.aiming) return;
+    if (!game.acceptsHumanInput || game.state != GameState.aiming) return;
     _dragging = true;
     game.beginCharge(event.localPosition);
   }

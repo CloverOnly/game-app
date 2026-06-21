@@ -5,6 +5,7 @@ import 'package:flame/components.dart';
 import 'package:flame_forge2d/flame_forge2d.dart';
 import 'package:flutter/material.dart';
 
+import 'ai_controller.dart';
 import 'components/debug_overlay.dart';
 import 'components/marble.dart';
 import 'components/marble_visual.dart';
@@ -12,6 +13,7 @@ import 'components/game_input.dart';
 import 'components/wall.dart';
 import 'constants.dart';
 import 'debug_log.dart';
+import 'geometry_utils.dart';
 import 'models.dart';
 import 'territory_manager.dart';
 import 'turn_manager.dart';
@@ -32,6 +34,15 @@ class LandGrabberGame extends Forge2DGame {
   final territory = TerritoryManager();
   final turn = TurnManager();
   final debug = GameDebugLog();
+  final _ai = AiController();
+
+  /// P2 = AI, P1 = 사람
+  bool get isAiTurn => turn.currentPlayer == AiController.aiPlayer;
+  bool get acceptsHumanInput =>
+      !isAiTurn &&
+      state != GameState.resolving &&
+      state != GameState.gameOver &&
+      state != GameState.moving;
 
   Vector2? lastTapPos;
 
@@ -55,6 +66,7 @@ class LandGrabberGame extends Forge2DGame {
   // 당기기 발사
   bool _fingerDown = false;
   Vector2? _fingerPos;
+  double _shotMovingTime = 0;
 
   @override
   Color backgroundColor() => const Color(0xFFE8E8E8);
@@ -81,7 +93,6 @@ class LandGrabberGame extends Forge2DGame {
 
     marbleVisual = MarbleVisual(
       getPosition: () => marble.body.position,
-      getPlayerId: () => marble.playerId,
       isPreview: () => marble.placementPreview,
     );
     await camera.viewport.add(marbleVisual);
@@ -129,6 +140,7 @@ class LandGrabberGame extends Forge2DGame {
   void update(double dt) {
     super.update(dt);
     if (state == GameState.moving) {
+      _shotMovingTime += dt;
       _updateMoving();
     }
     placementHintLayer.active = state == GameState.placing && !placementLocked;
@@ -157,6 +169,8 @@ class LandGrabberGame extends Forge2DGame {
   }
 
   void tryPlaceMarble(Vector2 local) {
+    if (!acceptsHumanInput) return;
+
     final x = local.x.toStringAsFixed(0);
     final y = local.y.toStringAsFixed(0);
     debug.log('📍 탭 ($x, $y) | state=$state locked=$placementLocked');
@@ -188,6 +202,10 @@ class LandGrabberGame extends Forge2DGame {
     }
 
     final pos = territory.clampPlacement(local.x, local.y, playerId);
+    _confirmPlacement(pos);
+  }
+
+  void _confirmPlacement(Offset pos) {
     marble.moveTo(Vector2(pos.dx, pos.dy));
     marble.placementPreview = false;
     placementLocked = true;
@@ -196,11 +214,49 @@ class LandGrabberGame extends Forge2DGame {
     debug.log(
       '✅ 배치 성공! 망=(${pos.dx.toInt()}, ${pos.dy.toInt()}) → aiming',
     );
-    _updateHud(status: '✅ 위치 확정! 망을 드래그해 당겨 발사');
+    _updateHud(
+      status: isAiTurn
+          ? 'AI 조준 중...'
+          : '✅ 위치 확정! 망을 드래그해 당겨 발사',
+    );
     _pushDebug();
+
+    if (isAiTurn) {
+      _scheduleAi(_aiPerformShot, 450);
+    }
+  }
+
+  void _aiPerformPlacement() {
+    if (!isAiTurn || state != GameState.placing || placementLocked) return;
+    final pos = _ai.planPlacement(territory);
+    debug.log('🤖 AI 배치 (${pos.dx.toInt()}, ${pos.dy.toInt()})');
+    _confirmPlacement(pos);
+  }
+
+  void _aiPerformShot() {
+    if (!isAiTurn || state != GameState.aiming || !placementLocked) return;
+    if (!turn.canShootAgain()) return;
+
+    final finger = _ai.planPullFinger(
+      territory: territory,
+      marblePos: marble.body.position,
+      shotNumber: turn.shotCount + 1,
+      leftStartZone: turn.leftStartZone,
+    );
+    debug.log('🤖 AI 발사 #${turn.shotCount + 1}');
+    _tryLaunch(finger);
+  }
+
+  void _scheduleAi(void Function() action, int delayMs) {
+    Future.delayed(Duration(milliseconds: delayMs), () {
+      if (state == GameState.gameOver || !isAiTurn) return;
+      action();
+    });
   }
 
   void beginCharge(Vector2 local) {
+    if (!acceptsHumanInput) return;
+
     final x = local.x.toStringAsFixed(0);
     final y = local.y.toStringAsFixed(0);
 
@@ -235,7 +291,7 @@ class LandGrabberGame extends Forge2DGame {
   }
 
   void endCharge([Vector2? releasePos]) {
-    if (!_fingerDown) return;
+    if (!acceptsHumanInput && !_fingerDown) return;
 
     if (releasePos != null) {
       _fingerPos = releasePos.clone();
@@ -304,6 +360,7 @@ class LandGrabberGame extends Forge2DGame {
 
     state = GameState.moving;
     turn.onShotFired();
+    _shotMovingTime = 0;
     _currentStroke = [
       GamePoint(marble.body.position.x, marble.body.position.y),
     ];
@@ -328,18 +385,33 @@ class LandGrabberGame extends Forge2DGame {
             5) {
       _currentStroke.add(GamePoint(x, y));
       _syncTrailDisplay();
+
+      if (hasSelfIntersection(_turnStrokes, _currentStroke)) {
+        marble.stop();
+        debug.log('❌ 자기 선 교차! 턴 실패');
+        _handleShotEnd(ShotEndResult.failedSelfIntersect);
+        return;
+      }
     }
 
     if (marble.speed >= 0.35) {
-      // 이동 중 필드 밖이면 즉시 아웃
       if (territory.isOutOfPlayfield(x, y)) {
         marble.stop();
+        _returnMarbleToBase();
         _handleShotEnd(ShotEndResult.failedOut);
       }
       return;
     }
 
     marble.stop();
+
+    final travel = strokeTravelDistance(_currentStroke);
+    if (travel < GameConfig.minShotTravelDistance ||
+        _shotMovingTime < GameConfig.minShotDurationSec) {
+      debug.log(
+        '⚠️ 짧은 이동 (${travel.toStringAsFixed(0)}px, ${_shotMovingTime.toStringAsFixed(2)}s) — 타수 차감',
+      );
+    }
 
     final outOfBounds = territory.isOutOfPlayfield(x, y);
 
@@ -351,6 +423,10 @@ class LandGrabberGame extends Forge2DGame {
       onOpponentBase: onOpponentBase,
       outOfBounds: outOfBounds,
     );
+
+    if (outOfBounds) {
+      _returnMarbleToBase();
+    }
 
     _handleShotEnd(result);
   }
@@ -370,16 +446,27 @@ class LandGrabberGame extends Forge2DGame {
         _currentStroke = [];
         _syncTrailDisplay();
         _updateHud(
-          status:
-              '발사 ${turn.shotCount}/${GameConfig.maxShotsPerTurn} - 길게 누른 뒤 당겨 발사!',
+          status: isAiTurn
+              ? 'AI 조준 중...'
+              : '발사 ${turn.shotCount}/${GameConfig.maxShotsPerTurn} - 망을 당겨 발사!',
         );
+        if (isAiTurn) {
+          _scheduleAi(_aiPerformShot, 550);
+        }
       case ShotEndResult.failedShots:
         _finishTurn('3번 안에 복귀 실패! 선이 지워집니다', keepLines: false);
       case ShotEndResult.failedOut:
-        _finishTurn('아웃! 경기장 밖으로 나감', keepLines: false);
+        _finishTurn('아웃! 본진으로 귀환 · 턴 종료', keepLines: false);
       case ShotEndResult.failedPenalty:
         _finishTurn('상대 본진 관통! 패널티', keepLines: false);
+      case ShotEndResult.failedSelfIntersect:
+        _finishTurn('자기 선 교차! 턴 실패', keepLines: false);
     }
+  }
+
+  void _returnMarbleToBase() {
+    final pos = territory.getStartZoneAnchor(turn.currentPlayer);
+    marble.moveTo(Vector2(pos.dx, pos.dy));
   }
 
   void _commitCurrentStroke() {
@@ -439,8 +526,14 @@ class LandGrabberGame extends Forge2DGame {
     marble.moveTo(Vector2(pos.dx, pos.dy));
 
     _updateHud(
-      status: '${players[playerId]!.name} - 원 안을 탭해 위치 선택 (1회만)',
+      status: isAiTurn
+          ? '🤖 AI 턴 - 자동 플레이 중'
+          : '${players[playerId]!.name} - 원 안을 탭해 위치 선택 (1회만)',
     );
+
+    if (isAiTurn) {
+      _scheduleAi(_aiPerformPlacement, 550);
+    }
   }
 
   void _syncTrailDisplay() {

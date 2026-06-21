@@ -159,6 +159,108 @@ class TerritoryManager {
     return isInStartZone(x, y, opponent);
   }
 
+  /// AI용: 플레이어 영토 경계/꼭짓점 샘플
+  List<Offset> getTerritoryBoundaryPoints(PlayerId playerId) {
+    final points = <Offset>[];
+
+    // 코너 1/4원 아크 샘플
+    final center = getCornerCenter(playerId);
+    const r = WorldConfig.cornerZoneRadius;
+    const arcSteps = 8;
+    for (var i = 0; i <= arcSteps; i++) {
+      final t = i / arcSteps;
+      if (playerId == PlayerId.p1) {
+        final angle = -math.pi / 2 + t * (math.pi / 2);
+        points.add(Offset(
+          center.dx + r * math.cos(angle),
+          center.dy + r * math.sin(angle),
+        ));
+      } else {
+        final angle = math.pi + t * (math.pi / 2);
+        points.add(Offset(
+          center.dx + r * math.cos(angle),
+          center.dy + r * math.sin(angle),
+        ));
+      }
+    }
+
+    for (final poly in polygons[playerId]!) {
+      points.addAll(poly.map((p) => Offset(p.x, p.y)));
+    }
+
+    return points;
+  }
+
+  /// AI용: 영토 중심 (코너 + 점령 폴리곤)
+  Offset getTerritoryCenter(PlayerId playerId) {
+    final boundary = getTerritoryBoundaryPoints(playerId);
+    if (boundary.isEmpty) return getStartZoneAnchor(playerId);
+
+    var sx = 0.0;
+    var sy = 0.0;
+    for (final p in boundary) {
+      sx += p.dx;
+      sy += p.dy;
+    }
+    return Offset(sx / boundary.length, sy / boundary.length);
+  }
+
+  /// AI용: 상대 영토를 깊게 관통할 최적 조준점
+  Offset findInvadeTarget(Offset from, PlayerId defender) {
+    final f = _playfield;
+    final fieldCenter = Offset(f.x + f.w / 2, f.y + f.h / 2);
+    final oppCenter = getTerritoryCenter(defender);
+    final boundary = getTerritoryBoundaryPoints(defender);
+
+    // 필드 중심 쪽으로 깊게 파고드는 목표 (상대 영토 중심 + 필드 중심 혼합)
+    var target = Offset(
+      oppCenter.dx * 0.35 + fieldCenter.dx * 0.65,
+      oppCenter.dy * 0.35 + fieldCenter.dy * 0.65,
+    );
+
+    // 경계점 중 필드 중심에 가장 가까운(=가장 깊은) 점과 비교해 더 좋은 쪽 선택
+    if (boundary.isNotEmpty) {
+      Offset? deepest;
+      var minDistToCenter = double.infinity;
+      for (final p in boundary) {
+        final d = (p - fieldCenter).distance;
+        if (d < minDistToCenter) {
+          minDistToCenter = d;
+          deepest = p;
+        }
+      }
+      if (deepest != null) {
+        target = Offset(
+          target.dx * 0.5 + deepest.dx * 0.5,
+          target.dy * 0.5 + deepest.dy * 0.5,
+        );
+      }
+    }
+
+    return target;
+  }
+
+  /// AI용: 복귀 거리에 맞는 발사 파워 (0~1)
+  double estimateReturnPower(Offset from, PlayerId playerId) {
+    final home = getStartZoneAnchor(playerId);
+    final dist = (from - home).distance;
+    return (dist / GameConfig.maxPullDistance * 1.08).clamp(0.55, 0.98);
+  }
+
+  /// AI용: 상대 영토를 관통할 발사 방향 후보
+  Offset? suggestInvadeDirection(
+    Offset from,
+    PlayerId attacker,
+    PlayerId defender,
+  ) {
+    final target = findInvadeTarget(from, defender);
+    final dx = target.dx - from.dx;
+    final dy = target.dy - from.dy;
+    final len = math.sqrt(dx * dx + dy * dy);
+    if (len < 1) return null;
+    return Offset(dx / len, dy / len);
+  }
+
   double getTerritoryRatio(PlayerId playerId) {
     final totalArea = _playfield.w * _playfield.h;
     var area = math.pi * WorldConfig.cornerZoneRadius * WorldConfig.cornerZoneRadius / 4;

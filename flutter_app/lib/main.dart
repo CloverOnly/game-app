@@ -3,17 +3,47 @@ import 'package:flutter/services.dart';
 
 import 'screens/menu_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  await _lockLandscape();
   runApp(const LandGrabberApp());
 }
 
-class LandGrabberApp extends StatelessWidget {
+Future<void> _lockLandscape() {
+  return SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
+}
+
+class LandGrabberApp extends StatefulWidget {
   const LandGrabberApp({super.key});
+
+  @override
+  State<LandGrabberApp> createState() => _LandGrabberAppState();
+}
+
+class _LandGrabberAppState extends State<LandGrabberApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _lockLandscape();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _lockLandscape();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

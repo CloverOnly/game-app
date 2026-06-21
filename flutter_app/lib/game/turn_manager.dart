@@ -55,4 +55,5 @@ enum ShotEndResult {
   failedShots,
   failedOut,
   failedPenalty,
+  failedSelfIntersect,
 }
