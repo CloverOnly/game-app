@@ -93,6 +93,7 @@ class LandGrabberGame extends Forge2DGame {
 
     marbleVisual = MarbleVisual(
       getPosition: () => marble.body.position,
+      getPlayerId: () => marble.playerId,
       isPreview: () => marble.placementPreview,
     );
     await camera.viewport.add(marbleVisual);
@@ -166,6 +167,14 @@ class LandGrabberGame extends Forge2DGame {
   void recordTap(Vector2 local) {
     lastTapPos = local.clone();
     _pushDebug();
+  }
+
+  void previewPlacement(Vector2 local) {
+    if (state != GameState.placing || placementLocked) return;
+    final playerId = turn.currentPlayer;
+    if (!territory.isInStartZone(local.x, local.y, playerId)) return;
+    final pos = territory.clampPlacement(local.x, local.y, playerId);
+    marble.moveTo(Vector2(pos.dx, pos.dy));
   }
 
   void tryPlaceMarble(Vector2 local) {
@@ -394,7 +403,7 @@ class LandGrabberGame extends Forge2DGame {
       }
     }
 
-    if (marble.speed >= 0.35) {
+    if (marble.speed >= GameConfig.marbleStopSpeed) {
       if (territory.isOutOfPlayfield(x, y)) {
         marble.stop();
         _returnMarbleToBase();
@@ -502,7 +511,7 @@ class LandGrabberGame extends Forge2DGame {
 
     _updateHud(status: status);
 
-    Future.delayed(const Duration(milliseconds: 1200), () {
+    Future.delayed(Duration(milliseconds: GameConfig.turnResolveDelayMs), () {
       if (state == GameState.gameOver) return;
       turn.switchPlayer();
       _startNewTurn();
@@ -528,7 +537,7 @@ class LandGrabberGame extends Forge2DGame {
     _updateHud(
       status: isAiTurn
           ? '🤖 AI 턴 - 자동 플레이 중'
-          : '${players[playerId]!.name} - 원 안을 탭해 위치 선택 (1회만)',
+          : '${players[playerId]!.name} - 원 안에서 위치 잡고 손을 떼세요 (1회)',
     );
 
     if (isAiTurn) {

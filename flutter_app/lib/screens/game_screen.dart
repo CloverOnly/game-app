@@ -68,13 +68,28 @@ class _GameScreenState extends State<GameScreen> {
         fit: StackFit.expand,
         children: [
           Positioned.fill(child: GameWidget(game: game)),
-          SafeArea(
-            child: Column(
-              children: [
-                _HudBar(hud: hud),
-                const Spacer(),
-                _BottomHud(hud: hud),
-              ],
+
+          // 맨 위: 점수 · 타이머
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              minimum: EdgeInsets.zero,
+              child: _HudBar(hud: hud),
+            ),
+          ),
+
+          // 맨 아래: 턴 안내 · 발사 횟수
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              top: false,
+              minimum: EdgeInsets.zero,
+              child: _BottomHud(hud: hud),
             ),
           ),
         ],
@@ -90,55 +105,35 @@ class _BottomHud extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: const Color(0xCC000000),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF444444)),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: const BoxDecoration(
+        color: Color(0xCC000000),
+        border: Border(
+          top: BorderSide(color: Color(0xFF333333)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    hud.status ?? '',
-                    style: const TextStyle(
-                      color: Color(0xFF7AB3F0),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Text(
-                  hud.bounceText,
-                  style: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 11),
-                ),
-              ],
-            ),
-            if (hud.debugLines.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                hud.debugLines.first,
-                style: const TextStyle(
-                  color: Color(0xFF888888),
-                  fontSize: 9,
-                  fontFamily: 'monospace',
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              hud.status ?? '',
+              style: const TextStyle(
+                color: Color(0xFF7AB3F0),
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
               ),
-            ],
-          ],
-        ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            hud.bounceText,
+            style: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 11),
+          ),
+        ],
       ),
     );
   }
@@ -152,11 +147,13 @@ class _HudBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xCC000000),
-        borderRadius: BorderRadius.circular(10),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+      decoration: const BoxDecoration(
+        color: Color(0xCC000000),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFF333333)),
+        ),
       ),
       child: Row(
         children: [
@@ -171,9 +168,9 @@ class _HudBar extends StatelessWidget {
   }
 
   TextStyle _style(Color color) => TextStyle(
-    fontSize: 14,
+    fontSize: 13,
     color: color,
     fontWeight: FontWeight.bold,
-    shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
+    shadows: const [Shadow(color: Colors.black, blurRadius: 2)],
   );
 }

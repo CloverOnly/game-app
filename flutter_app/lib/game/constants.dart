@@ -4,9 +4,13 @@ class GameConfig {
   static const maxShotsPerTurn = 3;
   static const matchDurationSec = 180;
   static const marbleRadius = 14.0;
-  static const launchPowerScale = 0.58;
+  static const launchPowerScale = 0.68;
   static const minLaunchSpeed = 10.0;
-  static const maxLaunchSpeed = 95.0;
+  static const maxLaunchSpeed = 110.0;
+  /// 구슬이 멈췄다고 판정하는 속도 (이하)
+  static const marbleStopSpeed = 0.42;
+  /// 턴 종료 메시지 표시 후 다음 턴까지 대기 (ms)
+  static const turnResolveDelayMs = 700;
   static const maxPullDistance = 140.0;
   static const minPullDistance = 6.0;
   /// 발사 후 유효 이동으로 인정하는 최소 거리 (미만이어도 타수 차감)
@@ -27,7 +31,7 @@ class WorldConfig {
 
 class PhysicsConfig {
   static const friction = 0.02;
-  static const linearDamping = 0.2;
+  static const linearDamping = 0.24;
   static const restitution = 0.75;
   static const density = 1.0;
 }
