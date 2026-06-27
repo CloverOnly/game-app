@@ -67,6 +67,10 @@ class LandGrabberGame extends Forge2DGame {
   bool _fingerDown = false;
   Vector2? _fingerPos;
   double _shotMovingTime = 0;
+  /// 이번 발사에서 본진에서 충분히 멀어졌는지 (복귀 보조용)
+  bool _strokeFarFromHome = false;
+  /// 이번 발사 중 본진에서 가장 멀어진 거리
+  double _strokePeakDistFromHome = 0;
 
   @override
   Color backgroundColor() => const Color(0xFFE8E8E8);
@@ -370,12 +374,47 @@ class LandGrabberGame extends Forge2DGame {
     state = GameState.moving;
     turn.onShotFired();
     _shotMovingTime = 0;
+    _strokeFarFromHome = false;
+    final home = territory.getStartZoneAnchor(turn.currentPlayer);
+    _strokePeakDistFromHome = _distFromHome(
+      marble.body.position,
+      home,
+    );
     _currentStroke = [
       GamePoint(marble.body.position.x, marble.body.position.y),
     ];
     _syncTrailDisplay();
     marble.launch(velocity);
     _updateHud(status: '발사 ${turn.shotCount}/${GameConfig.maxShotsPerTurn}');
+  }
+
+  double _distFromHome(Vector2 pos, Offset home) {
+    final dx = pos.x - home.dx;
+    final dy = pos.y - home.dy;
+    return math.sqrt(dx * dx + dy * dy);
+  }
+
+  /// 복귀 보조는 되돌아올 때만 (2타 출발·코너 통과 시 오작동 방지)
+  bool _isReturningHome(
+    Vector2 pos,
+    Offset home,
+    PlayerId playerId, {
+    required double distFromHome,
+  }) {
+    if (!turn.leftStartZone || !_strokeFarFromHome) return false;
+
+    final closing =
+        distFromHome < _strokePeakDistFromHome - GameConfig.homeReturnMinDelta;
+    if (!closing) return false;
+
+    if (territory.isInStartZone(pos.x, pos.y, playerId)) return true;
+
+    if (!territory.isNearOwnStartZone(pos.x, pos.y, playerId)) return false;
+
+    final toHome = Vector2(home.dx, home.dy) - pos;
+    if (toHome.length2 < 4) return true;
+
+    return marble.velocity.dot(toHome) > 0;
   }
 
   void _updateMoving() {
@@ -387,6 +426,22 @@ class LandGrabberGame extends Forge2DGame {
     if (!territory.isOnTerritory(x, y, playerId)) {
       turn.markLeftStartZone();
     }
+
+    final home = territory.getStartZoneAnchor(playerId);
+    final distFromHome = _distFromHome(pos, home);
+    if (distFromHome > _strokePeakDistFromHome) {
+      _strokePeakDistFromHome = distFromHome;
+    }
+    if (turn.leftStartZone &&
+        distFromHome > GameConfig.minDepartureForReturn) {
+      _strokeFarFromHome = true;
+    }
+    final returningHome = _isReturningHome(
+      pos,
+      home,
+      playerId,
+      distFromHome: distFromHome,
+    );
 
     final last = _currentStroke.isNotEmpty ? _currentStroke.last : null;
     if (last == null ||
@@ -403,11 +458,35 @@ class LandGrabberGame extends Forge2DGame {
       }
     }
 
+    // 복귀 중 시작 구역 진입 → 흡수 정지 (코너 벽 반사로 튕겨 나가는 것 방지)
+    if (returningHome &&
+        territory.isInStartZone(x, y, playerId) &&
+        marble.speed < GameConfig.homeCaptureMaxSpeed) {
+      marble.stop();
+    }
+
     if (marble.speed >= GameConfig.marbleStopSpeed) {
       if (territory.isOutOfPlayfield(x, y)) {
+        // 코너 벽 반사 직후 playfield 밖 → 아웃 대신 감속
+        if (returningHome &&
+            territory.isNearOwnStartZone(x, y, playerId)) {
+          marble.dampen(GameConfig.homeCornerDamping);
+          return;
+        }
         marble.stop();
         _returnMarbleToBase();
         _handleShotEnd(ShotEndResult.failedOut);
+        return;
+      }
+
+      if (returningHome &&
+          territory.isNearOwnStartZone(x, y, playerId)) {
+        marble.dampen(GameConfig.homeCornerDamping);
+      }
+
+      // 저속 구간은 빨리 정지 → 다음 타 준비 시간 단축
+      if (marble.speed < 6 && _shotMovingTime > 0.25) {
+        marble.stop();
       }
       return;
     }
@@ -422,9 +501,11 @@ class LandGrabberGame extends Forge2DGame {
       );
     }
 
-    final outOfBounds = territory.isOutOfPlayfield(x, y);
+    final outOfBounds = territory.isOutOfPlayfield(x, y) &&
+        !(returningHome && territory.isNearOwnStartZone(x, y, playerId));
 
-    final onOwnTerritory = territory.isOnTerritory(x, y, playerId);
+    final onOwnTerritory = territory.isOnTerritory(x, y, playerId) ||
+        (returningHome && territory.isInStartZone(x, y, playerId));
     final onOpponentBase = territory.isOnOpponentBase(x, y, playerId);
 
     final result = turn.evaluateShotEnd(

@@ -19,8 +19,8 @@ class Wall extends BodyComponent {
       ..setAsBoxXY(size.x / 2, size.y / 2);
 
     final fixtureDef = FixtureDef(shape)
-      ..restitution = 0.8
-      ..friction = 0.1;
+      ..restitution = 0.32
+      ..friction = 0.18;
 
     return world.createBody(bodyDef)..createFixture(fixtureDef);
   }

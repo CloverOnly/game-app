@@ -2,17 +2,24 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "대격돌! 땅따먹기 (Android)",
+      "name": "대격돌! 땅따먹기 (Windows)",
       "cwd": "flutter_app",
       "request": "launch",
       "type": "dart",
-      "deviceId": "emulator-5554"
+      "deviceId": "windows"
     },
     {
       "name": "대격돌! 땅따먹기 (자동 기기)",
       "cwd": "flutter_app",
       "request": "launch",
       "type": "dart"
+    },
+    {
+      "name": "대격돌! 땅따먹기 (Android)",
+      "cwd": "flutter_app",
+      "request": "launch",
+      "type": "dart",
+      "toolArgs": ["--device-timeout", "60"]
     }
   ]
 }

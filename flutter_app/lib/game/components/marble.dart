@@ -39,6 +39,11 @@ class Marble extends BodyComponent {
     body.angularVelocity = 0;
   }
 
+  void dampen(double factor) {
+    body.linearVelocity *= factor;
+    body.angularVelocity = 0;
+  }
+
   void moveTo(Vector2 position) {
     body.setTransform(position, 0);
     stop();

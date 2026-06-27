@@ -42,6 +42,27 @@ class TerritoryManager {
 
   bool isInsidePlayfield(double x, double y) => !isOutOfPlayfield(x, y);
 
+  /// 복귀 판정용 — 벽 반사로 playfield 밖으로 살짝 나간 코너 근처 포함
+  bool isNearOwnStartZone(
+    double x,
+    double y,
+    PlayerId playerId, {
+    double margin = 28,
+  }) {
+    if (isInStartZone(x, y, playerId)) return true;
+
+    final center = getCornerCenter(playerId);
+    final dx = x - center.dx;
+    final dy = y - center.dy;
+    final r = WorldConfig.cornerZoneRadius + margin;
+    if (dx * dx + dy * dy > r * r) return false;
+
+    return switch (playerId) {
+      PlayerId.p1 => dx >= -margin && dy <= margin,
+      PlayerId.p2 => dx <= margin && dy >= -margin,
+    };
+  }
+
   /// 필드 **안쪽** 1/4 원 시작 구역 (코너 꼭짓점 기준)
   bool isInStartZone(double x, double y, PlayerId playerId) {
     if (!isInsidePlayfield(x, y)) return false;

@@ -8,7 +8,7 @@ class GameConfig {
   static const minLaunchSpeed = 10.0;
   static const maxLaunchSpeed = 110.0;
   /// 구슬이 멈췄다고 판정하는 속도 (이하)
-  static const marbleStopSpeed = 0.42;
+  static const marbleStopSpeed = 2.5;
   /// 턴 종료 메시지 표시 후 다음 턴까지 대기 (ms)
   static const turnResolveDelayMs = 700;
   static const maxPullDistance = 140.0;
@@ -17,6 +17,14 @@ class GameConfig {
   static const minShotTravelDistance = 10.0;
   /// 발사 후 즉시 정지 판정 시간 (초)
   static const minShotDurationSec = 0.1;
+  /// 복귀 시 시작 구역에서 흡수(정지)하는 최대 속도
+  static const homeCaptureMaxSpeed = 22.0;
+  /// 코너 벽 반사 후 시작 구역 근처 감속 비율
+  static const homeCornerDamping = 0.82;
+  /// 이 거리 이상 벗어난 뒤에만 복귀(홈) 보조 적용
+  static const minDepartureForReturn = 55.0;
+  /// 복귀 판정: 최대 이탈 거리 대비 이만큼 가까워져야 '되돌아옴'
+  static const homeReturnMinDelta = 20.0;
 }
 
 class WorldConfig {
@@ -31,8 +39,8 @@ class WorldConfig {
 
 class PhysicsConfig {
   static const friction = 0.02;
-  static const linearDamping = 0.24;
-  static const restitution = 0.75;
+  static const linearDamping = 0.34;
+  static const restitution = 0.38;
   static const density = 1.0;
 }
 
