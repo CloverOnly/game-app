@@ -42,7 +42,7 @@ class TerritoryManager {
 
   bool isInsidePlayfield(double x, double y) => !isOutOfPlayfield(x, y);
 
-  /// 복귀 판정용 — 벽 반사로 playfield 밖으로 살짝 나간 코너 근처 포함
+  /// 복귀 판정용 — 시작 구역 근처 (코너 밖 살짝 포함)
   bool isNearOwnStartZone(
     double x,
     double y,

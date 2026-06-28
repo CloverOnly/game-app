@@ -19,8 +19,6 @@ class GameConfig {
   static const minShotDurationSec = 0.1;
   /// 복귀 시 시작 구역에서 흡수(정지)하는 최대 속도
   static const homeCaptureMaxSpeed = 22.0;
-  /// 코너 벽 반사 후 시작 구역 근처 감속 비율
-  static const homeCornerDamping = 0.82;
   /// 이 거리 이상 벗어난 뒤에만 복귀(홈) 보조 적용
   static const minDepartureForReturn = 55.0;
   /// 복귀 판정: 최대 이탈 거리 대비 이만큼 가까워져야 '되돌아옴'
@@ -31,7 +29,6 @@ class WorldConfig {
   /// 가로 모드 (landscape)
   static const width = 960.0;
   static const height = 540.0;
-  static const wallThickness = 20.0;
   /// 모서리 시작 구역(1/4 원) 반지름
   static const cornerZoneRadius = 84.0;
   static const fieldMargin = 36.0;

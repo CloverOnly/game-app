@@ -10,7 +10,6 @@ import 'components/debug_overlay.dart';
 import 'components/marble.dart';
 import 'components/marble_visual.dart';
 import 'components/game_input.dart';
-import 'components/wall.dart';
 import 'constants.dart';
 import 'debug_log.dart';
 import 'geometry_utils.dart';
@@ -111,27 +110,7 @@ class LandGrabberGame extends Forge2DGame {
     ));
     await camera.viewport.add(GameInput());
 
-    await _createWalls();
-
     _startNewTurn();
-  }
-
-  Future<void> _createWalls() async {
-    final f = territory.playfield;
-    const t = WorldConfig.wallThickness;
-    const r = GameConfig.marbleRadius;
-
-    // 플레이 필드(흰 네모) 경계에 벽 배치
-    final walls = [
-      (Vector2(f.x + f.w / 2, f.y - t / 2 + r), Vector2(f.w, t)),
-      (Vector2(f.x + f.w / 2, f.y + f.h + t / 2 - r), Vector2(f.w, t)),
-      (Vector2(f.x - t / 2 + r, f.y + f.h / 2), Vector2(t, f.h)),
-      (Vector2(f.x + f.w + t / 2 - r, f.y + f.h / 2), Vector2(t, f.h)),
-    ];
-
-    for (final (center, size) in walls) {
-      await world.add(Wall(topLeft: center - size / 2, size: size));
-    }
   }
 
   void tickMatchTimer() {
@@ -394,13 +373,14 @@ class LandGrabberGame extends Forge2DGame {
     return math.sqrt(dx * dx + dy * dy);
   }
 
-  /// 복귀 보조는 되돌아올 때만 (2타 출발·코너 통과 시 오작동 방지)
+  /// 복귀 보조는 3타(마지막 발사)에서만
   bool _isReturningHome(
     Vector2 pos,
     Offset home,
     PlayerId playerId, {
     required double distFromHome,
   }) {
+    if (turn.shotCount < GameConfig.maxShotsPerTurn) return false;
     if (!turn.leftStartZone || !_strokeFarFromHome) return false;
 
     final closing =
@@ -458,7 +438,14 @@ class LandGrabberGame extends Forge2DGame {
       }
     }
 
-    // 복귀 중 시작 구역 진입 → 흡수 정지 (코너 벽 반사로 튕겨 나가는 것 방지)
+    if (territory.isOutOfPlayfield(x, y)) {
+      marble.stop();
+      _returnMarbleToBase();
+      _handleShotEnd(ShotEndResult.failedOut);
+      return;
+    }
+
+    // 복귀 중 시작 구역 진입 → 흡수 정지
     if (returningHome &&
         territory.isInStartZone(x, y, playerId) &&
         marble.speed < GameConfig.homeCaptureMaxSpeed) {
@@ -466,24 +453,6 @@ class LandGrabberGame extends Forge2DGame {
     }
 
     if (marble.speed >= GameConfig.marbleStopSpeed) {
-      if (territory.isOutOfPlayfield(x, y)) {
-        // 코너 벽 반사 직후 playfield 밖 → 아웃 대신 감속
-        if (returningHome &&
-            territory.isNearOwnStartZone(x, y, playerId)) {
-          marble.dampen(GameConfig.homeCornerDamping);
-          return;
-        }
-        marble.stop();
-        _returnMarbleToBase();
-        _handleShotEnd(ShotEndResult.failedOut);
-        return;
-      }
-
-      if (returningHome &&
-          territory.isNearOwnStartZone(x, y, playerId)) {
-        marble.dampen(GameConfig.homeCornerDamping);
-      }
-
       // 저속 구간은 빨리 정지 → 다음 타 준비 시간 단축
       if (marble.speed < 6 && _shotMovingTime > 0.25) {
         marble.stop();
@@ -501,9 +470,6 @@ class LandGrabberGame extends Forge2DGame {
       );
     }
 
-    final outOfBounds = territory.isOutOfPlayfield(x, y) &&
-        !(returningHome && territory.isNearOwnStartZone(x, y, playerId));
-
     final onOwnTerritory = territory.isOnTerritory(x, y, playerId) ||
         (returningHome && territory.isInStartZone(x, y, playerId));
     final onOpponentBase = territory.isOnOpponentBase(x, y, playerId);
@@ -511,12 +477,8 @@ class LandGrabberGame extends Forge2DGame {
     final result = turn.evaluateShotEnd(
       onOwnTerritory: onOwnTerritory,
       onOpponentBase: onOpponentBase,
-      outOfBounds: outOfBounds,
+      outOfBounds: false,
     );
-
-    if (outOfBounds) {
-      _returnMarbleToBase();
-    }
 
     _handleShotEnd(result);
   }
