@@ -1,5 +1,13 @@
 enum PlayerId { p1, p2 }
 
+/// 경기장 네 모서리
+enum FieldCorner {
+  bottomLeft,
+  bottomRight,
+  topLeft,
+  topRight,
+}
+
 enum TurnResult { playing, claimed, failedShots, failedOut, failedPenalty }
 
 enum GameState { placing, aiming, moving, resolving, gameOver }

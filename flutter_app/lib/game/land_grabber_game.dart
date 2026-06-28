@@ -10,6 +10,7 @@ import 'components/debug_overlay.dart';
 import 'components/marble.dart';
 import 'components/marble_visual.dart';
 import 'components/game_input.dart';
+import 'corner_geometry.dart';
 import 'constants.dart';
 import 'debug_log.dart';
 import 'geometry_utils.dart';
@@ -109,6 +110,11 @@ class LandGrabberGame extends Forge2DGame {
       isVisible: () => true,
     ));
     await camera.viewport.add(GameInput());
+
+    debug.log(
+      '🎲 본진 배치: P1=${territory.playerCorners[PlayerId.p1]} '
+      'P2=${territory.playerCorners[PlayerId.p2]}',
+    );
 
     _startNewTurn();
   }
@@ -697,12 +703,12 @@ class PlacementHintLayer extends PositionComponent {
   void render(Canvas canvas) {
     if (!active) return;
 
-    final center = territory.getCornerCenter(playerId);
-    final r = WorldConfig.cornerZoneRadius;
+    final corner = territory.playerCorners[playerId]!;
+    final geo = CornerGeometry(corner);
+    final center = geo.centerOf(territory.playfield);
 
-    canvas.drawCircle(
-      Offset(center.dx, center.dy),
-      r,
+    canvas.drawPath(
+      geo.cornerPath(center),
       Paint()
         ..color = Color(players[playerId]!.trailColor).withValues(alpha: 0.15)
         ..style = PaintingStyle.stroke

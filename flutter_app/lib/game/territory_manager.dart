@@ -2,16 +2,18 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'constants.dart';
+import 'corner_geometry.dart';
 import 'models.dart';
 
 class TerritoryManager {
-  TerritoryManager() {
+  TerritoryManager({math.Random? random}) {
     _playfield = GameRect(
       WorldConfig.fieldMargin,
       WorldConfig.fieldMargin,
       WorldConfig.width - WorldConfig.fieldMargin * 2,
       WorldConfig.height - WorldConfig.fieldMargin * 2,
     );
+    assignRandomCorners(random);
   }
 
   late final GameRect _playfield;
@@ -20,15 +22,26 @@ class TerritoryManager {
     PlayerId.p2: [],
   };
 
+  final Map<PlayerId, FieldCorner> _playerCorners = {};
+
   GameRect get playfield => _playfield;
+
+  Map<PlayerId, FieldCorner> get playerCorners => Map.unmodifiable(_playerCorners);
+
+  /// 4모서리 중 서로 다른 2곳을 P1·P2 본진으로 랜덤 배정
+  void assignRandomCorners([math.Random? random]) {
+    final corners = List<FieldCorner>.from(FieldCorner.values)
+      ..shuffle(random ?? math.Random());
+    _playerCorners[PlayerId.p1] = corners[0];
+    _playerCorners[PlayerId.p2] = corners[1];
+  }
+
+  CornerGeometry _geometry(PlayerId playerId) =>
+      CornerGeometry(_playerCorners[playerId]!);
 
   /// 모서리 1/4 원의 중심점 (코너 꼭짓점)
   Offset getCornerCenter(PlayerId playerId) {
-    final f = _playfield;
-    return switch (playerId) {
-      PlayerId.p1 => Offset(f.x, f.y + f.h),
-      PlayerId.p2 => Offset(f.x + f.w, f.y),
-    };
+    return _geometry(playerId).centerOf(_playfield);
   }
 
   bool isOutOfPlayfield(double x, double y) {
@@ -51,66 +64,29 @@ class TerritoryManager {
   }) {
     if (isInStartZone(x, y, playerId)) return true;
 
-    final center = getCornerCenter(playerId);
+    final geo = _geometry(playerId);
+    final center = geo.centerOf(_playfield);
     final dx = x - center.dx;
     final dy = y - center.dy;
     final r = WorldConfig.cornerZoneRadius + margin;
     if (dx * dx + dy * dy > r * r) return false;
 
-    return switch (playerId) {
-      PlayerId.p1 => dx >= -margin && dy <= margin,
-      PlayerId.p2 => dx <= margin && dy >= -margin,
-    };
+    return geo.isNearQuarter(dx, dy, margin);
   }
 
   /// 필드 **안쪽** 1/4 원 시작 구역 (코너 꼭짓점 기준)
   bool isInStartZone(double x, double y, PlayerId playerId) {
     if (!isInsidePlayfield(x, y)) return false;
 
-    final center = getCornerCenter(playerId);
+    final geo = _geometry(playerId);
+    final center = geo.centerOf(_playfield);
     final r = WorldConfig.cornerZoneRadius;
     final dx = x - center.dx;
     final dy = y - center.dy;
 
     if (dx * dx + dy * dy > r * r) return false;
 
-    return switch (playerId) {
-      // 좌하단 코너 → 안쪽은 오른쪽·위
-      PlayerId.p1 => dx >= 0 && dy <= 0,
-      // 우상단 코너 → 안쪽은 왼쪽·아래
-      PlayerId.p2 => dx <= 0 && dy >= 0,
-    };
-  }
-
-  Path _cornerPath(PlayerId playerId) {
-    final center = getCornerCenter(playerId);
-    final r = WorldConfig.cornerZoneRadius;
-    final path = Path();
-
-    if (playerId == PlayerId.p1) {
-      // 좌하단: 코너 → 위 → 호(오른쪽) — 필드 안쪽
-      path.moveTo(center.dx, center.dy);
-      path.lineTo(center.dx, center.dy - r);
-      path.arcTo(
-        Rect.fromCircle(center: center, radius: r),
-        -math.pi / 2,
-        math.pi / 2,
-        false,
-      );
-      path.close();
-    } else {
-      // 우상단: 코너 → 왼쪽 → 호(아래) — 필드 안쪽
-      path.moveTo(center.dx, center.dy);
-      path.lineTo(center.dx - r, center.dy);
-      path.arcTo(
-        Rect.fromCircle(center: center, radius: r),
-        math.pi,
-        math.pi / 2,
-        false,
-      );
-      path.close();
-    }
-    return path;
+    return geo.isInsideQuarter(dx, dy);
   }
 
   Offset getDefaultPlacement(PlayerId playerId) {
@@ -119,15 +95,9 @@ class TerritoryManager {
 
   /// 시작 구역 안쪽 중심 (필드 방향으로 45°)
   Offset getStartZoneAnchor(PlayerId playerId) {
-    final center = getCornerCenter(playerId);
-    final d = WorldConfig.cornerZoneRadius * 0.52;
-    final pos = switch (playerId) {
-      // 좌하단 → 필드 안쪽(우상)
-      PlayerId.p1 => Offset(center.dx + d, center.dy - d),
-      // 우상단 → 필드 안쪽(좌하)
-      PlayerId.p2 => Offset(center.dx - d, center.dy + d),
-    };
-    return _clampInsidePlayfield(pos);
+    final geo = _geometry(playerId);
+    final center = geo.centerOf(_playfield);
+    return _clampInsidePlayfield(geo.inwardAnchor(center));
   }
 
   Offset _clampInsidePlayfield(Offset pos) {
@@ -140,26 +110,17 @@ class TerritoryManager {
   }
 
   Offset clampPlacement(double x, double y, PlayerId playerId) {
-    final center = getCornerCenter(playerId);
+    final geo = _geometry(playerId);
+    final center = geo.centerOf(_playfield);
     final r = WorldConfig.cornerZoneRadius - GameConfig.marbleRadius - 2;
-    var dx = x - center.dx;
-    var dy = y - center.dy;
+    final dx = x - center.dx;
+    final dy = y - center.dy;
 
-    if (playerId == PlayerId.p1) {
-      dx = dx.clamp(0.0, r);
-      dy = dy.clamp(-r, 0.0);
-    } else {
-      dx = dx.clamp(-r, 0.0);
-      dy = dy.clamp(0.0, r);
-    }
+    final local = geo.clampLocal(r, dx, dy);
 
-    final len = math.sqrt(dx * dx + dy * dy);
-    if (len > r) {
-      dx = dx / len * r;
-      dy = dy / len * r;
-    }
-
-    return _clampInsidePlayfield(Offset(center.dx + dx, center.dy + dy));
+    return _clampInsidePlayfield(
+      Offset(center.dx + local.dx, center.dy + local.dy),
+    );
   }
 
   void claimTerritory(PlayerId playerId, List<GamePoint> path) {
@@ -183,26 +144,17 @@ class TerritoryManager {
   /// AI용: 플레이어 영토 경계/꼭짓점 샘플
   List<Offset> getTerritoryBoundaryPoints(PlayerId playerId) {
     final points = <Offset>[];
-
-    // 코너 1/4원 아크 샘플
-    final center = getCornerCenter(playerId);
+    final geo = _geometry(playerId);
+    final center = geo.centerOf(_playfield);
     const r = WorldConfig.cornerZoneRadius;
     const arcSteps = 8;
+
     for (var i = 0; i <= arcSteps; i++) {
-      final t = i / arcSteps;
-      if (playerId == PlayerId.p1) {
-        final angle = -math.pi / 2 + t * (math.pi / 2);
-        points.add(Offset(
-          center.dx + r * math.cos(angle),
-          center.dy + r * math.sin(angle),
-        ));
-      } else {
-        final angle = math.pi + t * (math.pi / 2);
-        points.add(Offset(
-          center.dx + r * math.cos(angle),
-          center.dy + r * math.sin(angle),
-        ));
-      }
+      final angle = geo.arcAngleAt(i / arcSteps);
+      points.add(Offset(
+        center.dx + r * math.cos(angle),
+        center.dy + r * math.sin(angle),
+      ));
     }
 
     for (final poly in polygons[playerId]!) {
@@ -233,13 +185,11 @@ class TerritoryManager {
     final oppCenter = getTerritoryCenter(defender);
     final boundary = getTerritoryBoundaryPoints(defender);
 
-    // 필드 중심 쪽으로 깊게 파고드는 목표 (상대 영토 중심 + 필드 중심 혼합)
     var target = Offset(
       oppCenter.dx * 0.35 + fieldCenter.dx * 0.65,
       oppCenter.dy * 0.35 + fieldCenter.dy * 0.65,
     );
 
-    // 경계점 중 필드 중심에 가장 가까운(=가장 깊은) 점과 비교해 더 좋은 쪽 선택
     if (boundary.isNotEmpty) {
       Offset? deepest;
       var minDistToCenter = double.infinity;
@@ -284,7 +234,8 @@ class TerritoryManager {
 
   double getTerritoryRatio(PlayerId playerId) {
     final totalArea = _playfield.w * _playfield.h;
-    var area = math.pi * WorldConfig.cornerZoneRadius * WorldConfig.cornerZoneRadius / 4;
+    var area =
+        math.pi * WorldConfig.cornerZoneRadius * WorldConfig.cornerZoneRadius / 4;
     for (final poly in polygons[playerId]!) {
       area += _polygonArea(poly);
     }
@@ -294,19 +245,16 @@ class TerritoryManager {
   void paint(Canvas canvas) {
     final f = _playfield;
 
-    // 플레이 필드 밖 (아웃 영역)
     canvas.drawRect(
       Offset.zero & const Size(WorldConfig.width, WorldConfig.height),
       Paint()..color = const Color(0xFFD0D0D0),
     );
 
-    // 흰색 플레이 필드 (경기장)
     canvas.drawRect(
       Rect.fromLTWH(f.x, f.y, f.w, f.h),
       Paint()..color = const Color(0xFFFFFFFF),
     );
 
-    // 필드 테두리
     canvas.drawRect(
       Rect.fromLTWH(f.x, f.y, f.w, f.h),
       Paint()
@@ -315,12 +263,10 @@ class TerritoryManager {
         ..strokeWidth = 2,
     );
 
-    // 모서리 시작 구역 (1/4 원)
     for (final id in PlayerId.values) {
       _paintCornerZone(canvas, id);
     }
 
-    // 점령한 영토
     for (final id in PlayerId.values) {
       for (final poly in polygons[id]!) {
         if (poly.length < 3) continue;
@@ -345,7 +291,9 @@ class TerritoryManager {
   }
 
   void _paintCornerZone(Canvas canvas, PlayerId playerId) {
-    final path = _cornerPath(playerId);
+    final geo = _geometry(playerId);
+    final center = geo.centerOf(_playfield);
+    final path = geo.cornerPath(center);
     final color = Color(players[playerId]!.baseColor);
 
     canvas.drawPath(
