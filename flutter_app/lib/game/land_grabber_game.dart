@@ -10,7 +10,6 @@ import 'components/debug_overlay.dart';
 import 'components/marble.dart';
 import 'components/marble_visual.dart';
 import 'components/game_input.dart';
-import 'corner_geometry.dart';
 import 'constants.dart';
 import 'debug_log.dart';
 import 'geometry_utils.dart';
@@ -161,7 +160,7 @@ class LandGrabberGame extends Forge2DGame {
   void previewPlacement(Vector2 local) {
     if (state != GameState.placing || placementLocked) return;
     final playerId = turn.currentPlayer;
-    if (!territory.isInStartZone(local.x, local.y, playerId)) return;
+    if (!territory.canPlaceAt(local.x, local.y, playerId)) return;
     final pos = territory.clampPlacement(local.x, local.y, playerId);
     marble.moveTo(Vector2(pos.dx, pos.dy));
   }
@@ -185,16 +184,13 @@ class LandGrabberGame extends Forge2DGame {
     }
 
     final playerId = turn.currentPlayer;
-    final inZone = territory.isInStartZone(local.x, local.y, playerId);
-    final center = territory.getCornerCenter(playerId);
-    final dx = local.x - center.dx;
-    final dy = local.y - center.dy;
+    final inZone = territory.canPlaceAt(local.x, local.y, playerId);
     debug.log(
-      '🔍 구역검사: inZone=$inZone | 코너=(${center.dx.toInt()},${center.dy.toInt()}) offset=(${dx.toInt()},${dy.toInt()})',
+      '🔍 영토검사: inZone=$inZone | pos=(${local.x.toInt()},${local.y.toInt()})',
     );
 
     if (!inZone) {
-      debug.log('❌ 배치 실패: 시작 구역(1/4원) 밖');
+      debug.log('❌ 배치 실패: 내 영토 밖');
       _pushDebug();
       return;
     }
@@ -549,14 +545,9 @@ class LandGrabberGame extends Forge2DGame {
   }
 
   void _claimTurnTerritory() {
-    final allPoints = <GamePoint>[];
-    for (final stroke in _turnStrokes) {
-      allPoints.addAll(stroke);
-    }
-    if (allPoints.length >= 3) {
-      territory.claimTerritory(turn.currentPlayer, allPoints);
-      territoryLayer.refresh();
-    }
+    if (_turnStrokes.isEmpty) return;
+    territory.claimTerritory(turn.currentPlayer, _turnStrokes);
+    territoryLayer.refresh();
   }
 
   void _finishTurn(String status, {required bool keepLines}) {
@@ -600,7 +591,7 @@ class LandGrabberGame extends Forge2DGame {
     _updateHud(
       status: isAiTurn
           ? '🤖 AI 턴 - 자동 플레이 중'
-          : '${players[playerId]!.name} - 원 안에서 위치 잡고 손을 떼세요 (1회)',
+          : '${players[playerId]!.name} - 내 영토 안에서 위치 잡고 손을 떼세요 (1회)',
     );
 
     if (isAiTurn) {
@@ -717,14 +708,12 @@ class PlacementHintLayer extends PositionComponent {
   void render(Canvas canvas) {
     if (!active) return;
 
-    final corner = territory.playerCorners[playerId]!;
-    final geo = CornerGeometry(corner);
-    final center = geo.centerOf(territory.playfield);
+    final path = territory.getFullTerritoryPath(playerId);
 
     canvas.drawPath(
-      geo.cornerPath(center),
+      path,
       Paint()
-        ..color = Color(players[playerId]!.trailColor).withValues(alpha: 0.15)
+        ..color = Color(players[playerId]!.trailColor).withValues(alpha: 0.12)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );

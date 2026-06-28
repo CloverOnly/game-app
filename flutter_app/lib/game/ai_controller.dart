@@ -15,26 +15,30 @@ class AiController {
   static const aiPlayer = PlayerId.p2;
   static const humanPlayer = PlayerId.p1;
 
-  /// 상대 코너 쪽 끝에 배치해 1타 관통 각도 극대화
+  /// 내 영토 안쪽에 배치 (코너 또는 확장 영토)
   Offset planPlacement(TerritoryManager territory) {
-    final center = territory.getCornerCenter(aiPlayer);
     final f = territory.playfield;
     final fieldCenter = Offset(f.x + f.w / 2, f.y + f.h / 2);
+    final anchor = territory.getStartZoneAnchor(aiPlayer);
 
-    // 코너 → 필드 중심 방향으로 최대한 밀착 배치
-    final dx = fieldCenter.dx - center.dx;
-    final dy = fieldCenter.dy - center.dy;
+    final dx = fieldCenter.dx - anchor.dx;
+    final dy = fieldCenter.dy - anchor.dy;
     final len = math.sqrt(dx * dx + dy * dy);
     final dir = len > 0 ? Offset(dx / len, dy / len) : const Offset(-1, 1);
 
     final reach = WorldConfig.cornerZoneRadius * 0.78;
     final jitter = (_rng.nextDouble() - 0.5) * 6;
 
-    return territory.clampPlacement(
-      center.dx + dir.dx * reach + dir.dy * jitter * 0.3,
-      center.dy + dir.dy * reach - dir.dx * jitter * 0.3,
-      aiPlayer,
+    var target = Offset(
+      anchor.dx + dir.dx * reach + dir.dy * jitter * 0.3,
+      anchor.dy + dir.dy * reach - dir.dx * jitter * 0.3,
     );
+
+    if (!territory.canPlaceAt(target.dx, target.dy, aiPlayer)) {
+      target = territory.getTerritoryCenter(aiPlayer);
+    }
+
+    return territory.clampPlacement(target.dx, target.dy, aiPlayer);
   }
 
   /// 슬링샷 당김 손가락 위치 (launch = marble - finger 방향)
