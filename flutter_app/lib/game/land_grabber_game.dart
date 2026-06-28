@@ -436,6 +436,20 @@ class LandGrabberGame extends Forge2DGame {
       _currentStroke.add(GamePoint(x, y));
       _syncTrailDisplay();
 
+      if (turn.shotCount < GameConfig.maxShotsPerTurn &&
+          turn.leftStartZone &&
+          last != null &&
+          territory.strokeTouchesClaimedTerritory(
+            playerId,
+            last,
+            GamePoint(x, y),
+          )) {
+        marble.stop();
+        debug.log('❌ 기존 영토 접촉! 아웃');
+        _handleShotEnd(ShotEndResult.failedOut);
+        return;
+      }
+
       if (hasSelfIntersection(_turnStrokes, _currentStroke)) {
         marble.stop();
         debug.log('❌ 자기 선 교차! 턴 실패');

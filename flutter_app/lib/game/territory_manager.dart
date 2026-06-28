@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'constants.dart';
 import 'corner_geometry.dart';
+import 'geometry_utils.dart';
 import 'models.dart';
 
 class TerritoryManager {
@@ -130,8 +131,32 @@ class TerritoryManager {
 
   bool isOnTerritory(double x, double y, PlayerId playerId) {
     if (isInStartZone(x, y, playerId)) return true;
+    return isInClaimedPolygon(x, y, playerId);
+  }
+
+  /// 이전 턴에 확보한 영토 폴리곤 안인지 (시작 구역 제외)
+  bool isInClaimedPolygon(double x, double y, PlayerId playerId) {
     for (final poly in polygons[playerId]!) {
-      if (_pointInPolygon(x, y, poly)) return true;
+      if (poly.length >= 3 && _pointInPolygon(x, y, poly)) return true;
+    }
+    return false;
+  }
+
+  /// 궤적 선분이 기존 점령 영토에 닿는지 (내부 진입·경계 교차)
+  bool strokeTouchesClaimedTerritory(
+    PlayerId playerId,
+    GamePoint from,
+    GamePoint to,
+  ) {
+    if (isInClaimedPolygon(to.x, to.y, playerId)) return true;
+
+    for (final poly in polygons[playerId]!) {
+      if (poly.length < 2) continue;
+      for (var i = 0; i < poly.length; i++) {
+        final a = poly[i];
+        final b = poly[(i + 1) % poly.length];
+        if (segmentsCross(from, to, a, b)) return true;
+      }
     }
     return false;
   }

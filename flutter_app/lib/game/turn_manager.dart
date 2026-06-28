@@ -38,6 +38,10 @@ class TurnManager {
     if (onOpponentBase && leftStartZone) return ShotEndResult.failedPenalty;
 
     if (onOwnTerritory && leftStartZone) {
+      // 3타를 모두 써야 복귀 성공 — 그 전 복귀는 아웃
+      if (shotCount < GameConfig.maxShotsPerTurn) {
+        return ShotEndResult.failedOut;
+      }
       return ShotEndResult.claimed;
     }
 
