@@ -216,7 +216,7 @@ class LandGrabberGame extends Forge2DGame {
     _pushDebug();
 
     if (isAiTurn) {
-      _scheduleAi(_aiPerformShot, 450);
+      _scheduleAi(_aiPerformShot, 280);
     }
   }
 
@@ -470,7 +470,8 @@ class LandGrabberGame extends Forge2DGame {
 
     if (marble.speed >= GameConfig.marbleStopSpeed) {
       // 저속 구간은 빨리 정지 → 다음 타 준비 시간 단축
-      if (marble.speed < 6 && _shotMovingTime > 0.25) {
+      if (marble.speed < GameConfig.earlyStopSpeed &&
+          _shotMovingTime > GameConfig.earlyStopMinTimeSec) {
         marble.stop();
       }
       return;
@@ -519,7 +520,7 @@ class LandGrabberGame extends Forge2DGame {
               : '발사 ${turn.shotCount}/${GameConfig.maxShotsPerTurn} - 망을 당겨 발사!',
         );
         if (isAiTurn) {
-          _scheduleAi(_aiPerformShot, 550);
+          _scheduleAi(_aiPerformShot, 320);
         }
       case ShotEndResult.failedShots:
         _finishTurn('3번 안에 복귀 실패! 선이 지워집니다', keepLines: false);
@@ -595,7 +596,7 @@ class LandGrabberGame extends Forge2DGame {
     );
 
     if (isAiTurn) {
-      _scheduleAi(_aiPerformPlacement, 550);
+      _scheduleAi(_aiPerformPlacement, 320);
     }
   }
 
