@@ -439,6 +439,11 @@ class LandGrabberGame extends Forge2DGame {
             playerId,
             last,
             GamePoint(x, y),
+          ) &&
+          !territory.segmentEntersOpponentTerritory(
+            playerId,
+            last,
+            GamePoint(x, y),
           )) {
         marble.stop();
         debug.log('❌ 기존 영토 접촉! 아웃');
@@ -489,11 +494,9 @@ class LandGrabberGame extends Forge2DGame {
 
     final onOwnTerritory = territory.isOnTerritory(x, y, playerId) ||
         (returningHome && territory.isInStartZone(x, y, playerId));
-    final onOpponentBase = territory.isOnOpponentBase(x, y, playerId);
 
     final result = turn.evaluateShotEnd(
       onOwnTerritory: onOwnTerritory,
-      onOpponentBase: onOpponentBase,
       outOfBounds: false,
     );
 
@@ -505,6 +508,7 @@ class LandGrabberGame extends Forge2DGame {
       case ShotEndResult.claimed:
         _commitCurrentStroke();
         _claimTurnTerritory();
+        if (state == GameState.gameOver) return;
         _finishTurn(
           '${players[turn.currentPlayer]!.name} 땅 확보!',
           keepLines: true,
@@ -549,6 +553,35 @@ class LandGrabberGame extends Forge2DGame {
     if (_turnStrokes.isEmpty) return;
     territory.claimTerritory(turn.currentPlayer, _turnStrokes);
     territoryLayer.refresh();
+    _checkBaseCaptureWin();
+  }
+
+  void _checkBaseCaptureWin() {
+    if (state == GameState.gameOver) return;
+
+    final winnerId = territory.getBaseCaptureWinner();
+    if (winnerId == null) return;
+
+    final ratio = territory.getOpponentStartZoneCaptureRatio(
+      winnerId,
+      winnerId == PlayerId.p1 ? PlayerId.p2 : PlayerId.p1,
+    );
+    final pct = (ratio * 100).toStringAsFixed(0);
+    _declareWinner(
+      players[winnerId]!.name,
+      '${players[winnerId]!.name} 승리! 상대 본진 $pct% 점령',
+    );
+  }
+
+  void _declareWinner(String winner, String status) {
+    state = GameState.gameOver;
+    marble.stop();
+    aimLayer.clear();
+    _turnStrokes.clear();
+    _currentStroke = [];
+    trailLayer.clearTurn();
+    _updateHud(status: status);
+    onGameOver(winner);
   }
 
   void _finishTurn(String status, {required bool keepLines}) {
@@ -609,7 +642,6 @@ class LandGrabberGame extends Forge2DGame {
   }
 
   void _endMatch() {
-    state = GameState.gameOver;
     final r1 = territory.getTerritoryRatio(PlayerId.p1);
     final r2 = territory.getTerritoryRatio(PlayerId.p2);
 
@@ -619,8 +651,7 @@ class LandGrabberGame extends Forge2DGame {
         ? players[PlayerId.p2]!.name
         : '무승부';
 
-    _updateHud(status: '게임 종료! 승자: $winner');
-    onGameOver(winner);
+    _declareWinner(winner, '시간 종료! 승자: $winner');
   }
 
   void _updateHud({String? status}) {

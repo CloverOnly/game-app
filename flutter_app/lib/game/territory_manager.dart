@@ -109,8 +109,10 @@ class TerritoryManager {
     final dy = y - center.dy;
 
     if (dx * dx + dy * dy > r * r) return false;
+    if (!geo.isInsideQuarter(dx, dy)) return false;
 
-    return geo.isInsideQuarter(dx, dy);
+    // 상대에게 뺏긴 본진 구역은 시작 구역으로 취급하지 않음
+    return getFullTerritoryPath(playerId).contains(Offset(x, y));
   }
 
   Offset getDefaultPlacement(PlayerId playerId) {
@@ -120,7 +122,21 @@ class TerritoryManager {
   Offset getStartZoneAnchor(PlayerId playerId) {
     final geo = _geometry(playerId);
     final center = geo.centerOf(_playfield);
-    return _clampInsidePlayfield(geo.inwardAnchor(center));
+    final preferred = _clampInsidePlayfield(geo.inwardAnchor(center));
+    if (isInStartZone(preferred.dx, preferred.dy, playerId)) return preferred;
+
+    const samples = 12;
+    final r = WorldConfig.cornerZoneRadius - GameConfig.marbleRadius - 4;
+    for (var i = 0; i < samples; i++) {
+      final angle = geo.arcAngleAt(i / samples);
+      final p = _clampInsidePlayfield(Offset(
+        center.dx + r * 0.5 * math.cos(angle),
+        center.dy + r * 0.5 * math.sin(angle),
+      ));
+      if (isInStartZone(p.dx, p.dy, playerId)) return p;
+    }
+
+    return getTerritoryCenter(playerId);
   }
 
   Offset _clampInsidePlayfield(Offset pos) {
@@ -168,6 +184,29 @@ class TerritoryManager {
         strokePath,
       );
     }
+
+    final opponent = playerId == PlayerId.p1 ? PlayerId.p2 : PlayerId.p1;
+    _subtractTerritory(opponent, strokePath);
+  }
+
+  void _subtractTerritory(PlayerId playerId, Path stolen) {
+    _cornerPaths[playerId] = Path.combine(
+      PathOperation.difference,
+      _cornerPaths[playerId]!,
+      stolen,
+    );
+    if (_hasClaims[playerId]!) {
+      _claimedPaths[playerId] = Path.combine(
+        PathOperation.difference,
+        _claimedPaths[playerId]!,
+        stolen,
+      );
+    }
+  }
+
+  Path _originalCornerPath(PlayerId playerId) {
+    final geo = _geometry(playerId);
+    return geo.cornerPath(geo.centerOf(_playfield));
   }
 
   Path? _closedPathFromStrokes(List<List<GamePoint>> strokes) {
@@ -233,6 +272,33 @@ class TerritoryManager {
   bool isOnOpponentBase(double x, double y, PlayerId playerId) {
     final opponent = playerId == PlayerId.p1 ? PlayerId.p2 : PlayerId.p1;
     return isInStartZone(x, y, opponent);
+  }
+
+  bool isOnOpponentTerritory(double x, double y, PlayerId playerId) {
+    final opponent = playerId == PlayerId.p1 ? PlayerId.p2 : PlayerId.p1;
+    return getFullTerritoryPath(opponent).contains(Offset(x, y));
+  }
+
+  /// 선분이 상대 영토(본진·확장 영토)를 지나는지
+  bool segmentEntersOpponentTerritory(
+    PlayerId playerId,
+    GamePoint from,
+    GamePoint to,
+  ) {
+    if (isOnOpponentTerritory(from.x, from.y, playerId)) return true;
+    if (isOnOpponentTerritory(to.x, to.y, playerId)) return true;
+
+    final dist = math.sqrt(
+      (to.x - from.x) * (to.x - from.x) + (to.y - from.y) * (to.y - from.y),
+    );
+    final steps = (dist / 6).ceil().clamp(1, 40);
+    for (var i = 1; i < steps; i++) {
+      final t = i / steps;
+      final px = from.x + (to.x - from.x) * t;
+      final py = from.y + (to.y - from.y) * t;
+      if (isOnOpponentTerritory(px, py, playerId)) return true;
+    }
+    return false;
   }
 
   List<Offset> getTerritoryBoundaryPoints(PlayerId playerId) {
@@ -324,6 +390,40 @@ class TerritoryManager {
     final len = math.sqrt(dx * dx + dy * dy);
     if (len < 1) return null;
     return Offset(dx / len, dy / len);
+  }
+
+  /// 공격자 영토가 수비자 **시작 본진**(코너 1/4원) 중 차지한 비율
+  double getOpponentStartZoneCaptureRatio(PlayerId attacker, PlayerId defender) {
+    final defenderCorner = _originalCornerPath(defender);
+    final attackerPath = getFullTerritoryPath(attacker);
+    const step = 5.0;
+    var inCorner = 0;
+    var captured = 0;
+    final bounds = defenderCorner.getBounds();
+
+    for (var x = bounds.left + step / 2; x < bounds.right; x += step) {
+      for (var y = bounds.top + step / 2; y < bounds.bottom; y += step) {
+        final p = Offset(x, y);
+        if (!defenderCorner.contains(p)) continue;
+        inCorner++;
+        if (attackerPath.contains(p)) captured++;
+      }
+    }
+
+    if (inCorner == 0) return 0;
+    return captured / inCorner;
+  }
+
+  /// 상대 본진 50% 이상 점령한 플레이어 (없으면 null)
+  PlayerId? getBaseCaptureWinner() {
+    for (final attacker in PlayerId.values) {
+      final defender = attacker == PlayerId.p1 ? PlayerId.p2 : PlayerId.p1;
+      if (getOpponentStartZoneCaptureRatio(attacker, defender) >=
+          GameConfig.opponentStartZoneCaptureWinRatio) {
+        return attacker;
+      }
+    }
+    return null;
   }
 
   double getTerritoryRatio(PlayerId playerId) {

@@ -31,11 +31,9 @@ class TurnManager {
   /// 이번 발사가 끝났을 때 판정 (멈춘 상태에서만 호출)
   ShotEndResult evaluateShotEnd({
     required bool onOwnTerritory,
-    required bool onOpponentBase,
     required bool outOfBounds,
   }) {
     if (outOfBounds) return ShotEndResult.failedOut;
-    if (onOpponentBase && leftStartZone) return ShotEndResult.failedPenalty;
 
     if (onOwnTerritory && leftStartZone) {
       // 3타를 모두 써야 복귀 성공 — 그 전 복귀는 아웃

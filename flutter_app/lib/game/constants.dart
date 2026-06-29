@@ -2,7 +2,7 @@ import 'models.dart';
 
 class GameConfig {
   static const maxShotsPerTurn = 3;
-  static const matchDurationSec = 180;
+  static const matchDurationSec = 300;
   static const marbleRadius = 14.0;
   static const launchPowerScale = 0.95;
   static const minLaunchSpeed = 14.0;
@@ -26,6 +26,8 @@ class GameConfig {
   static const minDepartureForReturn = 55.0;
   /// 복귀 판정: 최대 이탈 거리 대비 이만큼 가까워져야 '되돌아옴'
   static const homeReturnMinDelta = 20.0;
+  /// 상대 시작 본진(코너) 면적의 이 비율 이상 점령 시 즉시 승리
+  static const opponentStartZoneCaptureWinRatio = 0.5;
 }
 
 class WorldConfig {

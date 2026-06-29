@@ -17,7 +17,7 @@ class _GameScreenState extends State<GameScreen> {
   GameHudState hud = const GameHudState(
     p1Percent: '0.0',
     p2Percent: '0.0',
-    timeText: '3:00',
+    timeText: '5:00',
     bounceText: '발사: 0 / 3',
     status: '',
   );
