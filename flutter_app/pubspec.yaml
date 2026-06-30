@@ -61,6 +61,8 @@ flutter:
 
   assets:
     - assets/images/menu_background.png
+    - assets/icons/
+    - assets/icons/stone_icon.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -14,34 +14,53 @@ import 'constants.dart';
 import 'debug_log.dart';
 import 'geometry_utils.dart';
 import 'models.dart';
+import 'stone_icon_loader.dart';
 import 'territory_manager.dart';
 import 'turn_manager.dart';
 
 class LandGrabberGame extends Forge2DGame {
-  LandGrabberGame({required this.onHudUpdate, required this.onGameOver})
-    : super(
+  LandGrabberGame({
+    required this.gameMode,
+    required this.onHudUpdate,
+    required this.onGameOver,
+  }) : super(
         gravity: Vector2.zero(),
+        zoom: 1,
         camera: CameraComponent.withFixedResolution(
           width: WorldConfig.width,
           height: WorldConfig.height,
         ),
       );
 
+  final GameMode gameMode;
   final void Function(GameHudState hud) onHudUpdate;
-  final void Function(String winner) onGameOver;
+  final void Function(GameOverResult result) onGameOver;
 
   final territory = TerritoryManager();
   final turn = TurnManager();
   final debug = GameDebugLog();
   final _ai = AiController();
 
-  /// P2 = AI, P1 = 사람
-  bool get isAiTurn => turn.currentPlayer == AiController.aiPlayer;
+  bool get isAiTurn =>
+      gameMode == GameMode.ai && turn.currentPlayer == AiController.aiPlayer;
   bool get acceptsHumanInput =>
-      !isAiTurn &&
+      _isHumanPlayer(turn.currentPlayer) &&
       state != GameState.resolving &&
       state != GameState.gameOver &&
       state != GameState.moving;
+
+  bool _isHumanPlayer(PlayerId id) {
+    return switch (gameMode) {
+      GameMode.ai => id == PlayerId.p1,
+      GameMode.local => true,
+      GameMode.pvp => id == PlayerId.p1,
+    };
+  }
+
+  String _playerName(PlayerId id) {
+    if (gameMode == GameMode.ai && id == PlayerId.p2) return 'AI';
+    return players[id]!.name;
+  }
 
   Vector2? lastTapPos;
 
@@ -78,6 +97,8 @@ class LandGrabberGame extends Forge2DGame {
   Future<void> onLoad() async {
     await super.onLoad();
 
+    final stoneImage = await StoneIconLoader.load();
+
     territoryLayer = TerritoryLayer(territory);
     trailLayer = TrailLayer();
     aimLayer = AimLayer();
@@ -95,8 +116,8 @@ class LandGrabberGame extends Forge2DGame {
     await world.add(marble);
 
     marbleVisual = MarbleVisual(
+      image: stoneImage,
       getPosition: () => marble.body.position,
-      getPlayerId: () => marble.playerId,
       isPreview: () => marble.placementPreview,
     );
     await camera.viewport.add(marbleVisual);
@@ -134,10 +155,6 @@ class LandGrabberGame extends Forge2DGame {
     }
     placementHintLayer.active = state == GameState.placing && !placementLocked;
     placementHintLayer.playerId = turn.currentPlayer;
-    placementHintLayer.marblePos = Vector2(
-      marble.body.position.x,
-      marble.body.position.y,
-    );
     if (_fingerDown && state == GameState.aiming && _fingerPos != null) {
       aimLayer.drawSlingshot(
         marble.body.position,
@@ -510,7 +527,7 @@ class LandGrabberGame extends Forge2DGame {
         _claimTurnTerritory();
         if (state == GameState.gameOver) return;
         _finishTurn(
-          '${players[turn.currentPlayer]!.name} 땅 확보!',
+          '${_playerName(turn.currentPlayer)} 땅 확보!',
           keepLines: true,
         );
       case ShotEndResult.continueTurn:
@@ -567,13 +584,19 @@ class LandGrabberGame extends Forge2DGame {
       winnerId == PlayerId.p1 ? PlayerId.p2 : PlayerId.p1,
     );
     final pct = (ratio * 100).toStringAsFixed(0);
+    final winnerName = _playerName(winnerId);
     _declareWinner(
-      players[winnerId]!.name,
-      '${players[winnerId]!.name} 승리! 상대 본진 $pct% 점령',
+      winnerName,
+      '$winnerName 승리! 상대 본진 $pct% 점령',
+      winnerId: winnerId,
     );
   }
 
-  void _declareWinner(String winner, String status) {
+  void _declareWinner(
+    String winner,
+    String status, {
+    PlayerId? winnerId,
+  }) {
     state = GameState.gameOver;
     marble.stop();
     aimLayer.clear();
@@ -581,7 +604,7 @@ class LandGrabberGame extends Forge2DGame {
     _currentStroke = [];
     trailLayer.clearTurn();
     _updateHud(status: status);
-    onGameOver(winner);
+    onGameOver(GameOverResult(winnerName: winner, winnerId: winnerId));
   }
 
   void _finishTurn(String status, {required bool keepLines}) {
@@ -625,7 +648,7 @@ class LandGrabberGame extends Forge2DGame {
     _updateHud(
       status: isAiTurn
           ? '🤖 AI 턴 - 자동 플레이 중'
-          : '${players[playerId]!.name} - 내 영토 안에서 위치 잡고 손을 떼세요 (1회)',
+          : '${_playerName(playerId)} - 내 영토 안에서 위치 잡고 손을 떼세요 (1회)',
     );
 
     if (isAiTurn) {
@@ -645,13 +668,14 @@ class LandGrabberGame extends Forge2DGame {
     final r1 = territory.getTerritoryRatio(PlayerId.p1);
     final r2 = territory.getTerritoryRatio(PlayerId.p2);
 
-    final winner = r1 > r2
-        ? players[PlayerId.p1]!.name
+    final winnerId = r1 > r2
+        ? PlayerId.p1
         : r2 > r1
-        ? players[PlayerId.p2]!.name
-        : '무승부';
+        ? PlayerId.p2
+        : null;
+    final winner = winnerId != null ? _playerName(winnerId) : '무승부';
 
-    _declareWinner(winner, '시간 종료! 승자: $winner');
+    _declareWinner(winner, '시간 종료! 승자: $winner', winnerId: winnerId);
   }
 
   void _updateHud({String? status}) {
@@ -729,7 +753,6 @@ class PlacementHintLayer extends PositionComponent {
 
   bool active = false;
   PlayerId playerId = PlayerId.p1;
-  Vector2? marblePos;
 
   @override
   Future<void> onLoad() async {
@@ -749,17 +772,6 @@ class PlacementHintLayer extends PositionComponent {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
-
-    if (marblePos != null) {
-      canvas.drawCircle(
-        Offset(marblePos!.x, marblePos!.y),
-        GameConfig.marbleRadius + 6,
-        Paint()
-          ..color = Color(players[playerId]!.color).withValues(alpha: 0.35)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2,
-      );
-    }
   }
 }
 

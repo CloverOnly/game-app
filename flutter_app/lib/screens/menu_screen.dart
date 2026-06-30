@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../game/models.dart';
 import '../widgets/adaptive_asset_image.dart';
 import 'game_screen.dart';
 
@@ -58,15 +59,29 @@ class MenuScreen extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        _WoodStartButton(
+                        _ModeButton(
                           scale: scale,
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const GameScreen(),
-                              ),
-                            );
-                          },
+                          icon: Icons.smart_toy_outlined,
+                          label: 'AI 대전',
+                          subtitle: 'vs 컴퓨터',
+                          highlighted: true,
+                          onPressed: () => _startGame(context, GameMode.ai),
+                        ),
+                        SizedBox(height: 8 * scale),
+                        _ModeButton(
+                          scale: scale,
+                          icon: Icons.people_outline,
+                          label: '로컬 대전',
+                          subtitle: '나 vs 나',
+                          onPressed: () => _startGame(context, GameMode.local),
+                        ),
+                        SizedBox(height: 8 * scale),
+                        _ModeButton(
+                          scale: scale,
+                          icon: Icons.wifi,
+                          label: 'PVP 모드',
+                          subtitle: '다른 사람과',
+                          onPressed: () => _showPvpComingSoon(context, scale),
                         ),
                         SizedBox(height: 4 * scale),
                         Text(
@@ -84,6 +99,62 @@ class MenuScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _startGame(BuildContext context, GameMode mode) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GameScreen(mode: mode),
+      ),
+    );
+  }
+
+  void _showPvpComingSoon(BuildContext context, double scale) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2A1F14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16 * scale),
+          side: const BorderSide(color: Color(0xFF8B6347), width: 1.5),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.wifi, color: const Color(0xFFFFE082), size: 22 * scale),
+            SizedBox(width: 8 * scale),
+            Text(
+              '온라인 PVP',
+              style: TextStyle(
+                color: const Color(0xFFFFE082),
+                fontSize: adaptiveFont(context, 16),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          '다른 사람과 온라인 대전하는 PVP 모드는\n준비 중입니다. 곧 만나보실 수 있어요!',
+          style: TextStyle(
+            color: const Color(0xFFFFF3E0),
+            fontSize: adaptiveFont(context, 13),
+            height: 1.4,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              '확인',
+              style: TextStyle(
+                color: const Color(0xFFFFE082),
+                fontSize: adaptiveFont(context, 14),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -133,17 +204,28 @@ class _RuleChip extends StatelessWidget {
   }
 }
 
-class _WoodStartButton extends StatefulWidget {
-  const _WoodStartButton({required this.scale, required this.onPressed});
+class _ModeButton extends StatefulWidget {
+  const _ModeButton({
+    required this.scale,
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onPressed,
+    this.highlighted = false,
+  });
 
   final double scale;
+  final IconData icon;
+  final String label;
+  final String subtitle;
   final VoidCallback onPressed;
+  final bool highlighted;
 
   @override
-  State<_WoodStartButton> createState() => _WoodStartButtonState();
+  State<_ModeButton> createState() => _ModeButtonState();
 }
 
-class _WoodStartButtonState extends State<_WoodStartButton>
+class _ModeButtonState extends State<_ModeButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse;
 
@@ -153,7 +235,10 @@ class _WoodStartButtonState extends State<_WoodStartButton>
     _pulse = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
+    );
+    if (widget.highlighted) {
+      _pulse.repeat(reverse: true);
+    }
   }
 
   @override
@@ -168,17 +253,17 @@ class _WoodStartButtonState extends State<_WoodStartButton>
     return AnimatedBuilder(
       animation: _pulse,
       builder: (context, child) {
-        final pulse = 1.0 + _pulse.value * 0.03;
+        final pulse = widget.highlighted ? 1.0 + _pulse.value * 0.03 : 1.0;
         return Transform.scale(scale: pulse, child: child);
       },
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: widget.onPressed,
-          borderRadius: BorderRadius.circular(18 * s),
+          borderRadius: BorderRadius.circular(14 * s),
           child: Ink(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18 * s),
+              borderRadius: BorderRadius.circular(14 * s),
               gradient: const LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -192,36 +277,49 @@ class _WoodStartButtonState extends State<_WoodStartButton>
               boxShadow: const [
                 BoxShadow(
                   color: Color(0x66000000),
-                  blurRadius: 10,
-                  offset: Offset(0, 4),
+                  blurRadius: 8,
+                  offset: Offset(0, 3),
                 ),
               ],
             ),
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24 * s, vertical: 12 * s),
+              padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 8 * s),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.play_arrow_rounded,
+                    widget.icon,
                     color: const Color(0xFFFFE082),
-                    size: 28 * s,
+                    size: 22 * s,
                   ),
-                  SizedBox(width: 6 * s),
-                  Text(
-                    'vs AI 대전 시작',
-                    style: TextStyle(
-                      fontSize: adaptiveFont(context, 18),
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFFFFE082),
-                      shadows: const [
-                        Shadow(
-                          color: Color(0xFF3E2723),
-                          blurRadius: 2,
-                          offset: Offset(1, 1),
+                  SizedBox(width: 8 * s),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.label,
+                        style: TextStyle(
+                          fontSize: adaptiveFont(context, 14),
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFFFFE082),
+                          shadows: const [
+                            Shadow(
+                              color: Color(0xFF3E2723),
+                              blurRadius: 2,
+                              offset: Offset(1, 1),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      Text(
+                        widget.subtitle,
+                        style: TextStyle(
+                          fontSize: adaptiveFont(context, 10),
+                          color: const Color(0xFFFFF3E0).withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

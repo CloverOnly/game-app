@@ -1,5 +1,14 @@
 enum PlayerId { p1, p2 }
 
+enum GameMode {
+  /// 플레이어 vs AI
+  ai,
+  /// 같은 기기에서 2인 로컬 대전
+  local,
+  /// 온라인 PVP (준비 중)
+  pvp,
+}
+
 /// 경기장 네 모서리
 enum FieldCorner {
   bottomLeft,
@@ -40,4 +49,16 @@ class GameRect {
   final double y;
   final double w;
   final double h;
+}
+
+class GameOverResult {
+  const GameOverResult({
+    required this.winnerName,
+    this.winnerId,
+  });
+
+  final String winnerName;
+  final PlayerId? winnerId;
+
+  bool get isDraw => winnerId == null;
 }

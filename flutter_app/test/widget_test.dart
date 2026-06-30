@@ -6,8 +6,8 @@ void main() {
   testWidgets('메뉴 화면이 표시된다', (WidgetTester tester) async {
     await tester.pumpWidget(const LandGrabberApp());
 
-    expect(find.text('대격돌!'), findsOneWidget);
-    expect(find.text('땅따먹기'), findsOneWidget);
-    expect(find.text('▶  1:1 대전 시작'), findsOneWidget);
+    expect(find.text('AI 대전'), findsOneWidget);
+    expect(find.text('로컬 대전'), findsOneWidget);
+    expect(find.text('PVP 모드'), findsOneWidget);
   });
 }

@@ -4,9 +4,13 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
 import '../game/land_grabber_game.dart';
+import '../game/models.dart';
+import '../widgets/adaptive_asset_image.dart';
 
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key});
+  const GameScreen({super.key, required this.mode});
+
+  final GameMode mode;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -27,6 +31,7 @@ class _GameScreenState extends State<GameScreen> {
   void initState() {
     super.initState();
     game = LandGrabberGame(
+      gameMode: widget.mode,
       onHudUpdate: (state) {
         if (!mounted) return;
         setState(() {
@@ -42,10 +47,9 @@ class _GameScreenState extends State<GameScreen> {
           );
         });
       },
-      onGameOver: (winner) {
-        Future.delayed(const Duration(seconds: 3), () {
-          if (mounted) Navigator.of(context).pop();
-        });
+      onGameOver: (result) {
+        if (!mounted) return;
+        _showGameOverDialog(result);
       },
     );
 
@@ -58,6 +62,109 @@ class _GameScreenState extends State<GameScreen> {
   void dispose() {
     _matchTimer?.cancel();
     super.dispose();
+  }
+
+  PlayerId? get _humanPlayerId {
+    return switch (widget.mode) {
+      GameMode.ai || GameMode.pvp => PlayerId.p1,
+      GameMode.local => null,
+    };
+  }
+
+  void _showGameOverDialog(GameOverResult result) {
+    final scale = adaptiveScale(context);
+    final content = _gameOverContent(result);
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF2A1F14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16 * scale),
+          side: BorderSide(color: content.accent.withValues(alpha: 0.6), width: 2),
+        ),
+        title: Row(
+          children: [
+            Icon(content.icon, color: content.accent, size: 28 * scale),
+            SizedBox(width: 10 * scale),
+            Expanded(
+              child: Text(
+                content.title,
+                style: TextStyle(
+                  color: content.accent,
+                  fontSize: adaptiveFont(context, 18),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          content.message,
+          style: TextStyle(
+            color: const Color(0xFFFFF3E0),
+            fontSize: adaptiveFont(context, 14),
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              if (mounted) Navigator.of(context).pop();
+            },
+            child: Text(
+              '확인',
+              style: TextStyle(
+                color: content.accent,
+                fontSize: adaptiveFont(context, 14),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  _GameOverContent _gameOverContent(GameOverResult result) {
+    if (result.isDraw) {
+      return const _GameOverContent(
+        title: '무승부',
+        message: '점수가 동점입니다!',
+        icon: Icons.handshake_outlined,
+        accent: Color(0xFFB0BEC5),
+      );
+    }
+
+    if (widget.mode == GameMode.local) {
+      return _GameOverContent(
+        title: '${result.winnerName} 승리!',
+        message: '경기가 종료되었습니다.',
+        icon: Icons.emoji_events_outlined,
+        accent: result.winnerId == PlayerId.p1
+            ? const Color(0xFF7AB3F0)
+            : const Color(0xFFF09090),
+      );
+    }
+
+    final human = _humanPlayerId;
+    if (human != null && result.winnerId == human) {
+      return const _GameOverContent(
+        title: '승리!',
+        message: '축하합니다! 승리했습니다!',
+        icon: Icons.emoji_events,
+        accent: Color(0xFFFFD54F),
+      );
+    }
+
+    return const _GameOverContent(
+      title: '패배',
+      message: '패배했습니다. 다시 도전해 보세요!',
+      icon: Icons.sentiment_dissatisfied_outlined,
+      accent: Color(0xFFEF9A9A),
+    );
   }
 
   @override
@@ -173,4 +280,18 @@ class _HudBar extends StatelessWidget {
     fontWeight: FontWeight.bold,
     shadows: const [Shadow(color: Colors.black, blurRadius: 2)],
   );
+}
+
+class _GameOverContent {
+  const _GameOverContent({
+    required this.title,
+    required this.message,
+    required this.icon,
+    required this.accent,
+  });
+
+  final String title;
+  final String message;
+  final IconData icon;
+  final Color accent;
 }
