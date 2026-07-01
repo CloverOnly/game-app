@@ -18,7 +18,7 @@ class MarbleVisual extends PositionComponent {
   final Vector2 Function() getPosition;
   final bool Function() isPreview;
 
-  static const _maxSize = GameConfig.marbleRadius * 4.2;
+  static const _maxSize = GameConfig.marbleRadius * 2.0;
 
   @override
   Future<void> onLoad() async {
