@@ -445,26 +445,6 @@ class TerritoryManager {
   }
 
   void paint(Canvas canvas) {
-    final f = _playfield;
-
-    canvas.drawRect(
-      Offset.zero & const Size(WorldConfig.width, WorldConfig.height),
-      Paint()..color = const Color(0xFFD0D0D0),
-    );
-
-    canvas.drawRect(
-      Rect.fromLTWH(f.x, f.y, f.w, f.h),
-      Paint()..color = const Color(0xFFFFFFFF),
-    );
-
-    canvas.drawRect(
-      Rect.fromLTWH(f.x, f.y, f.w, f.h),
-      Paint()
-        ..color = const Color(0xFFCCCCCC)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-
     for (final id in PlayerId.values) {
       final path = getFullTerritoryPath(id);
       canvas.drawPath(

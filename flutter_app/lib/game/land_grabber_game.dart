@@ -8,13 +8,13 @@ import 'package:flutter/material.dart';
 import 'ai_controller.dart';
 import 'components/debug_overlay.dart';
 import 'components/marble.dart';
+import 'components/playground_background.dart';
 import 'components/marble_visual.dart';
 import 'components/game_input.dart';
 import 'constants.dart';
 import 'debug_log.dart';
 import 'geometry_utils.dart';
 import 'models.dart';
-import 'stone_icon_loader.dart';
 import 'territory_manager.dart';
 import 'turn_manager.dart';
 
@@ -91,19 +91,18 @@ class LandGrabberGame extends Forge2DGame {
   double _strokePeakDistFromHome = 0;
 
   @override
-  Color backgroundColor() => const Color(0xFFE8E8E8);
+  Color backgroundColor() => const Color(0xFF8B6F52);
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-
-    final stoneImage = await StoneIconLoader.load();
 
     territoryLayer = TerritoryLayer(territory);
     trailLayer = TrailLayer();
     aimLayer = AimLayer();
     placementHintLayer = PlacementHintLayer(territory);
 
+    await camera.viewport.add(PlaygroundBackground(playfield: territory.playfield));
     await camera.viewport.add(territoryLayer);
     await camera.viewport.add(trailLayer);
     await camera.viewport.add(placementHintLayer);
@@ -116,7 +115,6 @@ class LandGrabberGame extends Forge2DGame {
     await world.add(marble);
 
     marbleVisual = MarbleVisual(
-      image: stoneImage,
       getPosition: () => marble.body.position,
       isPreview: () => marble.placementPreview,
     );

@@ -4,6 +4,7 @@ class GameConfig {
   static const maxShotsPerTurn = 3;
   static const matchDurationSec = 300;
   static const marbleRadius = 14.0;
+  static const marbleVisualScale = 2.0;
   static const launchPowerScale = 0.95;
   static const minLaunchSpeed = 14.0;
   static const maxLaunchSpeed = 150.0;
